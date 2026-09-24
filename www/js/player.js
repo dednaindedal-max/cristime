@@ -7,6 +7,37 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   const ui = document.getElementById('play');
   const joy = document.getElementById('joy'), knob = joy.querySelector('i');
   let chibi = createChibi(); const S = 0.95; chibi.scale.setScalar(S); chibi.visible = false; scene.add(chibi);
+  // ---------- вид от 1-го лица: пингвиньи ласты + снежок в руке ----------
+  const vm = new THREE.Group(); vm.scale.setScalar(0.62); vm.position.set(0, -0.02, -0.12); vm.visible = false; camera.add(vm); if (!camera.parent) scene.add(camera);
+  const vmMat = (c, r = 0.6) => new THREE.MeshStandardMaterial({ color: c, roughness: r, emissive: c, emissiveIntensity: 0.25 });
+  const navy = vmMat(0x1d2c63), belly = vmMat(0xf4efe4, 0.8), snowM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, emissive: 0xdde8ff, emissiveIntensity: 0.35 });
+  function flipper(side) {
+    const g = new THREE.Group();
+    const arm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 14), navy); arm.scale.set(0.55, 1.6, 0.9); arm.position.y = 0.1; g.add(arm);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.075, 18, 12), navy); tip.scale.set(0.6, 1.3, 0.95); tip.position.set(0, 0.25, 0.01); g.add(tip);
+    const under = new THREE.Mesh(new THREE.SphereGeometry(0.1, 18, 12), belly); under.scale.set(0.35, 1.45, 0.75); under.position.set(-side * 0.035, 0.1, 0.012); g.add(under);
+    const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.009, 8, 20), vmMat(0x2a3d80)); stripe.rotation.x = Math.PI / 2; stripe.scale.set(0.6, 0.95, 1); stripe.position.y = 0.19; g.add(stripe);
+    g.traverse(o => { if (o.isMesh) { o.renderOrder = 10; o.frustumCulled = false; } }); return g;
+  }
+  const fL = flipper(-1), fR = flipper(1); vm.add(fL, fR);
+  const hand = new THREE.Group(); fR.add(hand); hand.position.set(-0.02, 0.33, 0.05);
+  const vball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075, 3), snowM); hand.add(vball);
+  for (let i = 0; i < 7; i++) { const k = new THREE.Mesh(new THREE.IcosahedronGeometry(0.018 + Math.random() * 0.012, 1), snowM); k.position.setFromSphericalCoords(0.07, Math.random() * 3, Math.random() * 6.3); vball.add(k); }
+  vball.traverse(o => { if (o.isMesh) { o.renderOrder = 11; o.frustumCulled = false; } });
+  let vmT = 0;
+  function animVM(dt, spd) {
+    if (!vm.visible) return; vmT += dt * (3 + spd * 7);
+    const bob = Math.sin(vmT) * 0.012 * Math.min(1, spd + 0.15), sw = Math.cos(vmT * 0.5) * 0.02 * spd;
+    const asp = Math.min(1.6, camera.aspect) / 1.6;
+    fL.position.set(-0.3 * asp - 0.02, -0.33 + bob, -0.5 + sw); fL.rotation.set(-0.55, 0.15, 0.55 + Math.sin(vmT * 0.5) * 0.08 * spd);
+    let rx = -0.6, rz = -0.45, px = 0.3 * asp + 0.02, py = -0.3 - bob, pz = -0.5 - sw;
+    if (throwT > 0) { const u = throwT;
+      if (u < 0.45) { const k = Math.sin(u / 0.45 * Math.PI / 2); rx += 1.3 * k; py += 0.12 * k; pz += 0.18 * k; rz -= 0.3 * k; }   // замах назад
+      else { const k = Math.min(1, (u - 0.45) / 0.2), back = Math.max(0, (u - 0.65) / 0.35);
+        rx += 1.3 - 2.0 * k + 0.7 * back; py += 0.12 - 0.08 * k - 0.04 * back; pz += 0.18 - 0.3 * k + 0.12 * back; rz -= 0.3 - 0.3 * back; } }  // бросок вперёд и возврат
+    fR.position.set(px, py, pz); fR.rotation.set(rx, -0.15, rz);
+    const vis = throwT > 0.45 ? Math.max(0, (throwT - 0.75) / 0.25) : 1; vball.scale.setScalar(Math.max(0.001, vis));   // новый снежок «лепится» заново
+  }
   const pos = new THREE.Vector3(0, 0, 4), vel = new THREE.Vector3();
   let yaw = 0, pitch = -0.12, vy = 0, onGround = true, face = Math.PI, lastSpd = 0;
   let spawned = false, active = false, third = true, map = null, colliders = [], ride = null;
@@ -59,7 +90,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   document.getElementById('pBall').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); throwBall(); });
   document.getElementById('pView').onclick = () => setThird(!third);
   document.getElementById('pRun').onclick = e => { run = !run; e.currentTarget.classList.toggle('on', run); };
-  function setThird(v) { third = v; chibi.visible = third; document.getElementById('pView').textContent = third ? '👁 1-е лицо' : '🎥 3-е лицо'; }
+  function setThird(v) { third = v; chibi.visible = third; vm.visible = !third; document.getElementById('pView').textContent = third ? '👁 1-е лицо' : '🎥 3-е лицо'; }
 
   function enable(on, m) {
     active = on; map = m; ui.style.display = on ? 'flex' : 'none';
@@ -67,7 +98,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
       colliders = map.userData.colliders(); ride = map.userData.sledRide();
       if (!spawned) { spawned = true; pos.set(0.5 + (Math.random() - 0.5) * 3, 0, 4.4 + Math.random() * 0.6); yaw = 0; face = Math.PI; pitch = -0.12; mode = 'walk'; }
       camera.fov = 70; camera.updateProjectionMatrix(); setThird(third);
-    } else { chibi.visible = false; document.exitPointerLock?.(); }
+    } else { chibi.visible = false; vm.visible = false; document.exitPointerLock?.(); }
   }
 
   // ---------- физика ----------
@@ -132,8 +163,8 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
       const b = ride.ladderBot, tp = ride.ladderTop, L = b.distanceTo(tp);
       climbU = Math.min(1, climbU + dt * 1.25 / L * (0.6 + Math.max(0, iy) * 0.8 + (mag < 0.05 ? 0.4 : 0)));
       tmp.set(tp.x - b.x, 0, tp.z - b.z).normalize();
-      pos.lerpVectors(b, tp, climbU).addScaledVector(tmp, 0.28);
-      face = Math.atan2(-tmp.x, -tmp.z); animSpd = 0.9; pose = 'climb';
+      pos.lerpVectors(b, tp, climbU).addScaledVector(tmp, -0.3);
+      face = Math.atan2(tmp.x, tmp.z); animSpd = 0.9; pose = 'climb';
       if (climbU >= 1) { mode = 'deck'; tmp.subVectors(ride.deck, tp).setY(0).normalize(); pos.copy(tp).addScaledVector(tmp, 0.3); pos.y = ride.deck.y; }
     } else if (mode === 'deck') {
       vel.copy(dir).multiplyScalar(2.2); pos.addScaledVector(vel, dt); pos.y = ride.deck.y; onGround = true;
@@ -180,7 +211,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
     chibi.rotation.y = face;
     const animPose = mode === 'climb' ? 'climb' : mode === 'slide' ? pose : mode === 'belly' ? (pose === 'sit' ? 'sit' : 'belly') : pose;
     lastSpd = animSpd; lastPose = animPose;
-    chibi.userData.animate(dt, animSpd, t, !onGround && mode === 'walk', animPose, throwT);
+    chibi.userData.animate(dt, animSpd, t, !onGround && mode === 'walk', animPose, throwT); animVM(dt, mode === 'walk' && onGround ? animSpd : 0);
 
     // камера
     const low = animPose === 'belly' ? 0.45 : animPose === 'sit' ? 0.6 : 1;

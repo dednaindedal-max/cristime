@@ -175,9 +175,9 @@ if (SHOT) {
   setTimeout(() => {
     if (qp.get('play')) { toGame(false); if (qp.get('view') === 'f') player.look(Math.PI, 0.12, qp.get('d') ? +qp.get('d') : 1.7);
       if (qp.get('slide')) player.debug.set('slide', +qp.get('slide')); if (qp.get('climb')) player.debug.set('climb', +qp.get('climb'));
-      if (qp.get('yaw')) player.look(+qp.get('yaw'), 0.25, 4.5); }
+      if (qp.get('yaw')) player.look(+qp.get('yaw'), 0.25, 4.5); if (qp.get('fp')) $('pView').click(); }
     const steps = +(qp.get('steps') || 40);
-    for (let i = 0; i < steps; i++) { map.userData.update(i * 0.033); festive.update(0.033, i * 0.033); if (state === 'lobby') { lobbyCam(i * 0.033, 0.033); snowUI(i * 0.033); } else player.update(0.033, i * 0.033); }
+    for (let i = 0; i < steps; i++) { if (qp.get('th') && i === steps - +qp.get('th')) dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); map.userData.update(i * 0.033); festive.update(0.033, i * 0.033); if (state === 'lobby') { lobbyCam(i * 0.033, 0.033); snowUI(i * 0.033); } else player.update(0.033, i * 0.033); }
     renderer.render(scene, camera); renderer.render(scene, camera);
     console.log('calls', renderer.info.render.calls, 'tris', renderer.info.render.triangles);
     const N = 60, t0 = performance.now(); for (let i = 0; i < N; i++) renderer.render(scene, camera); gl.finish();
