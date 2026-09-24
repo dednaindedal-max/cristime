@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Cristime</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="vendor/qrcode.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/": "./vendor/addons/"
+} }
+</script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a1850">
+<link rel="icon" href="icon-192.png">
+</head>
+<body>
+<div id="app"></div>
+<div id="fps"></div>
+<div id="menu">
+  <button id="menuBtn">☰ Меню</button>
+  <button id="fsBtn">⛶</button>
+</div>
+<div id="room"><div class="rc">Комната <b id="rCode">—</b> <button id="rCopy">🔗 Пригласить</button><button id="rAdd" style="display:none">➕ Игрок</button></div><div id="rList"></div></div>
+<div id="toast"></div>
+<div id="qrm"><div class="qbox">
+  <b id="qTitle"></b><div id="qHint"></div>
+  <div id="qImg"></div><video id="qVid" playsinline muted></video>
+  <div class="qrow"><button id="qScan">📷 Сканировать</button><button id="qClose">✖ Закрыть</button></div>
+  <details><summary>Нет камеры? Код текстом</summary><textarea id="qText" placeholder="Вставь код друга"></textarea><div class="qrow"><button id="qCopy">📋 Копировать мой</button><button id="qPaste">✔ Применить</button></div></details>
+</div></div>
+<div id="frost"></div>
+<div id="lobby">
+  <canvas id="snowfx"></canvas>
+  <div class="panel">
+    <div class="logo"><span class="l1">❄ CRISTIME ❄</span><span class="l2">🎄 Новогоднее лобби</span></div>
+    <div class="scr" id="scrMain">
+      <label>Имя</label>
+      <input id="nick" maxlength="14" placeholder="Введи своё имя">
+      <label>Цвет шапки и шарфа</label>
+      <div id="colors"></div>
+      <button class="big green" id="bHost">🎄 Создать лобби</button>
+      <button class="big blue" id="bJoinScr">🔗 Подключиться</button>
+      <button class="big orange" id="bLan">📡 Без интернета</button>
+      <button class="big ghost" id="bSolo">🚶 Играть одному</button>
+      <div class="row"><button class="small" id="bFs">⛶ Полный экран</button></div>
+    </div>
+    <div class="scr" id="scrJoin" style="display:none">
+      <label>Код комнаты</label>
+      <input id="code" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase;letter-spacing:.35em;text-align:center;font-size:26px">
+      <button class="big blue" id="bJoin">▶ Войти</button>
+      <button class="big ghost" id="bBack">← Назад</button>
+    </div>
+    <div class="scr" id="scrLan" style="display:none">
+      <label>Игра по раздаче без интернета</label>
+      <button class="big green" id="bLanHost">📶 Я раздаю (хост)</button>
+      <button class="big blue" id="bLanJoin">📱 Я подключаюсь</button>
+      <button class="big ghost" id="bLanBack">← Назад</button>
+    </div>
+    <div id="status"></div>
+    <div class="foot">Друзья подключаются по коду — через раздачу, Wi-Fi или из любого города</div>
+  </div>
+</div>
+<div id="play"><div id="joy"><i></i></div>
+  <div class="pbtns"><button id="pView">🎥 3-е лицо</button><button id="pRun">🏃 Бег</button><button id="pBall">❄</button><button id="pJump">⤒</button></div>
+  <div class="phint">WASD — ходить · мышь — обзор · клик / F — снежок · Пробел — прыжок (зажать — на живот!) · Shift — бег · V — вид<br>Горка: подойди к лестнице — залезешь сам, шагни в жёлоб (с прыжком — на животе)</div></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

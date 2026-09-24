@@ -1,0 +1,2 @@
+{ "appId": "app.cristime.game", "appName": "Cristime", "webDir": "www",
+  "server": { "androidScheme": "https" }, "android": { "allowMixedContent": true } }
