@@ -33,19 +33,28 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   for (let i = 0; i < 9; i++) { const k = new THREE.Mesh(new THREE.IcosahedronGeometry(0.009 + Math.random() * 0.006, 1), snowM); k.position.setFromSphericalCoords(0.066, Math.random() * 3, Math.random() * 6.3); vball.add(k); }
   vball.traverse(o => { if (o.isMesh) { o.renderOrder = 11; o.frustumCulled = false; } });
   let vmT = 0;
+  let vmAir = 0, vmSpd = 0;
   function animVM(dt, spd) {
-    if (!vm.visible) return; vmT += dt * (3 + spd * 7);
-    const bob = Math.sin(vmT) * 0.012 * Math.min(1, spd + 0.15), sw = Math.cos(vmT * 0.5) * 0.02 * spd;
-    const asp = Math.min(1.6, camera.aspect) / 1.6;
-    fL.position.set(-0.36 * asp - 0.04, -0.46 + bob, -0.5 + sw); fL.rotation.set(-0.35, 0.35, -0.75 + Math.sin(vmT * 0.5) * 0.08 * spd);
-    let rx = -0.3, rz = 0.55, px = 0.3 * asp + 0.04, py = -0.44 - bob, pz = -0.5 - sw;
-    if (throwT > 0) { const u = throwT;
-      if (u < 0.45) { const k = Math.sin(u / 0.45 * Math.PI / 2); rx += 1.3 * k; py += 0.12 * k; pz += 0.18 * k; rz -= 0.3 * k; }   // замах назад
-      else { const k = Math.min(1, (u - 0.45) / 0.2), back = Math.max(0, (u - 0.65) / 0.35);
-        rx += 1.3 - 2.0 * k + 0.7 * back; py += 0.12 - 0.08 * k - 0.04 * back; pz += 0.18 - 0.3 * k + 0.12 * back; rz -= 0.3 - 0.3 * back; } }  // бросок вперёд и возврат
-    fR.position.set(px, py, pz); fR.rotation.set(rx, -0.3, rz);
-    const vis = throwT > 0.45 ? Math.max(0, (throwT - 0.75) / 0.25) : 1; vball.scale.setScalar(Math.max(0.001, vis));   // новый снежок «лепится» заново
+    if (!vm.visible) return;
+    vmSpd += (spd - vmSpd) * Math.min(1, dt * 8); vmAir += ((onGround ? 0 : 1) - vmAir) * Math.min(1, dt * 10);
+    vmT += dt * (2 + vmSpd * 9);
+    const w = Math.sin(vmT), w2 = Math.sin(vmT * 2), br = Math.sin(performance.now() * 0.002) * 0.008;
+    const A = Math.min(1.2, vmSpd), asp = Math.min(1.6, camera.aspect) / 1.6;
+    const bob = Math.abs(w) * 0.03 * A + br;                       // шаг вразвалочку: ласты качаются поочерёдно
+    const flap = vmAir * (0.5 + Math.sin(performance.now() * 0.03) * 0.35);   // в прыжке машет
+    fL.position.set(-0.42 * asp - 0.02 - A * 0.02, -0.5 + bob + vmAir * 0.08, -0.5 + w * 0.06 * A);
+    fL.rotation.set(-0.35 + w * 0.35 * A, 0.35, -0.8 + w2 * 0.06 * A - flap);
+    let rx = -0.35 - w * 0.35 * A, rz = 0.6 + flap, px = 0.38 * asp + 0.02 + A * 0.02, py = -0.48 + bob + vmAir * 0.08, pz = -0.5 - w * 0.06 * A;
+    if (throwT > 0) { const u = throwT; flapK = 0;
+      if (u < 0.45) { const k = Math.sin(u / 0.45 * Math.PI / 2); rx += 1.2 * k; py += 0.14 * k; pz += 0.2 * k; rz -= 0.5 * k; px += 0.04 * k; }   // замах за плечо
+      else { const k = 1 - (1 - Math.min(1, (u - 0.45) / 0.18)) ** 3, back = Math.max(0, (u - 0.63) / 0.37);
+        rx += 1.2 - 2.1 * k + 0.9 * back; py += 0.14 - 0.1 * k - 0.04 * back; pz += 0.2 - 0.34 * k + 0.14 * back; rz -= 0.5 - 0.2 * k - 0.3 * back; px += 0.04 - 0.1 * k + 0.06 * back; } }
+    fR.position.set(px, py, pz); fR.rotation.set(rx, -0.35, rz);
+    const vis = throwT > 0.45 ? Math.max(0, (throwT - 0.75) / 0.25) : 1; vball.scale.setScalar(Math.max(0.001, vis * (1 + (1 - vis) * 0.3)));
+    vm.position.set(Math.sin(vmT * 0.5) * 0.006 * A, -Math.abs(w) * 0.006 * A, -0.1);
   }
+  let flapK = 0;
+
   const pos = new THREE.Vector3(0, 0, 4), vel = new THREE.Vector3();
   let yaw = 0, pitch = -0.12, vy = 0, onGround = true, face = Math.PI, lastSpd = 0;
   let spawned = false, active = false, third = true, map = null, colliders = [], ride = null;
@@ -90,7 +99,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   });
   const up = e => { if (e.pointerId === joyId) { joyId = null; mv.x = mv.y = 0; run = false; knob.style.transform = ''; joy.classList.remove('on'); } look.delete(e.pointerId); };
   addEventListener('pointerup', up); addEventListener('pointercancel', up);
-  const turn = (dx, dy, k) => { yaw -= dx * k; pitch = THREE.MathUtils.clamp(pitch - dy * k, -1.2, 1.0); };
+  let sens = 1, fovV = 70; const turn = (dx, dy, k) => { k *= sens; yaw -= dx * k; pitch = THREE.MathUtils.clamp(pitch - dy * k, -1.2, 1.0); };
   cv.addEventListener('wheel', e => { if (active && third) camDist = THREE.MathUtils.clamp(camDist + e.deltaY * 0.004, 1.8, 8); }, { passive: true });
   const jb = document.getElementById('pJump');
   jb.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); jumpDown(); });
@@ -105,7 +114,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
     if (on) {
       colliders = map.userData.colliders(); ride = map.userData.sledRide();
       if (!spawned) { spawned = true; pos.set(0.5 + (Math.random() - 0.5) * 3, 0, 4.4 + Math.random() * 0.6); yaw = 0; face = Math.PI; pitch = -0.12; mode = 'walk'; }
-      camera.fov = 70; camera.updateProjectionMatrix(); setThird(third);
+      camera.fov = fovV; camera.updateProjectionMatrix(); setThird(third);
     } else { chibi.visible = false; vm.visible = false; document.exitPointerLock?.(); }
   }
 
@@ -225,7 +234,7 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
     const low = animPose === 'belly' ? 0.45 : animPose === 'sit' ? 0.6 : 1;
     if (!third) {
       const eye = pos.y + 1.0 * S * low;
-      camera.position.set(pos.x, eye, pos.z); camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      camera.position.set(pos.x, eye + Math.abs(Math.sin(vmT)) * 0.025 * Math.min(1, vmSpd), pos.z); camera.rotation.set(pitch, yaw, Math.sin(vmT) * 0.008 * Math.min(1, vmSpd), 'YXZ');
     } else {
       if (mode === 'slide' || mode === 'climb' || mode === 'deck') {       // на горке камера сама встаёт сзади-сверху
         let d = face + Math.PI - yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); if (mode !== 'deck' || mag < 0.05) yaw += d * Math.min(1, dt * 3);
@@ -243,5 +252,5 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   const getState = () => ({ x: +pos.x.toFixed(3), y: +pos.y.toFixed(3), z: +pos.z.toFixed(3), f: +face.toFixed(3), s: +lastSpd.toFixed(2), a: !onGround && mode === 'walk' ? 1 : 0, m: lastPose, th: +throwT.toFixed(2) });
   const onHit = () => { hitT = 0.6; };
   return { setColor, getState, onHit, get chibi() { return chibi; }, get pos() { return pos; }, enable, update, isActive: () => active,
-    look: (y, p, d) => { yaw = y; pitch = p; if (d) camDist = d; }, debug: { set: (m, u) => { mode = m; if (m === 'slide') { slideU = u; slideV = 5; pose = 'belly'; } if (m === 'climb') climbU = u; } } };
+    setSens: v => sens = v, setFov: v => fovV = v, look: (y, p, d) => { yaw = y; pitch = p; if (d) camDist = d; }, debug: { set: (m, u) => { mode = m; if (m === 'slide') { slideU = u; slideV = 5; pose = 'belly'; } if (m === 'climb') climbU = u; } } };
 }

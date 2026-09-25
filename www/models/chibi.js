@@ -139,7 +139,8 @@ export function createChibi({ color = 0xc8352c } = {}) {
     if (thr > 0) { const a = Math.sin(thr * Math.PI); wl -= a * 0.4; wx0 += thr < 0.5 ? thr * 2 * 2.6 : (1 - thr) * 2 * 2.6 - (thr - 0.5) * 4; }
     wings[0].rotation.set(wx0, 0, wl); wings[1].rotation.set(wx1, 0, wr);
     // весь риг: лёжа на животе / сидя
-    rig.rotation.x = P.belly * (Math.PI / 2 - 0.12) - P.sit * 0.45;
+    rig.rotation.x = P.belly * (Math.PI / 2 - 0.12) - P.sit * 0.45 + amt * walkK * (0.1 + Math.abs(s) * 0.04) + (air ? -0.08 : 0);
+    rig.rotation.z = s * 0.1 * amt * walkK;   // покачивание с боку на бок
     rig.position.set(0, P.belly * 0.24 + P.sit * 0.02, -P.belly * 0.3 + P.sit * 0.05);
     head.rotation.z = -s * 0.08 * amt * walkK; head.rotation.x = Math.sin(t * 1.3) * 0.02 - P.belly * 1.0 + P.sit * 0.2 - P.climb * 0.25;
     blob.scale.setScalar((1 - body.position.y) * (1 + P.belly * 0.5));

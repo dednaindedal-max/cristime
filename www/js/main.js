@@ -4,6 +4,12 @@ import { createPlayer } from './player.js';
 import { createNet } from './net.js';
 import { createSnowballs } from './snow.js';
 import { createFestive } from './festive.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+window.__load?.(75, 'Строим карту…');
 
 const qp = new URLSearchParams(location.search);
 const SHOT = qp.get('shot');
@@ -121,8 +127,8 @@ $('bLanJoin').onclick = () => { net.openLan(false); qr.mode = 'guestScan'; qrSho
 
 $('rCopy').onclick = async () => { const url = location.origin + location.pathname + '?room=' + net.code;
   try { await navigator.clipboard.writeText(url); toast('Ссылка скопирована!'); } catch (e) { prompt('Ссылка для друга:', url); } };
-const fs = async () => { try { if (!document.fullscreenElement) { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape').catch(() => {}); } else await document.exitFullscreen(); } catch (e) {} };
-$('fsBtn').onclick = fs; $('bFs').onclick = fs;
+const fsUnused = async () => { try { if (!document.fullscreenElement) { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); await screen.orientation?.lock?.('landscape').catch(() => {}); } else await document.exitFullscreen(); } catch (e) {} };
+
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 // снег в меню
@@ -142,7 +148,36 @@ let portalCd = 0;
 toLobby();
 const urlRoom = qp.get('room');
 if (urlRoom) { $('scrMain').style.display = 'none'; $('scrJoin').style.display = ''; $('code').value = urlRoom.toUpperCase(); status('Приглашение в комнату ' + urlRoom.toUpperCase() + ' — нажми «Войти»'); }
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight); });
+// ---------- настройки ----------
+let composer = null, bloom = null;
+const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
+prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true;
+function applySettings() {
+  const q = prefs.q, dpr = devicePixelRatio;
+  renderer.setPixelRatio(SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]);
+  renderer.setSize(innerWidth, innerHeight);
+  const sm = [512, 1024, 2048, 4096][q]; sun.castShadow = q > 0;
+  if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+  renderer.shadowMap.type = q >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; renderer.shadowMap.needsUpdate = true;
+  scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); });
+  if (q === 3) { if (!composer) { composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
+      bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.82); composer.addPass(bloom);
+      composer.addPass(new OutputPass()); composer.addPass(new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio())); }
+    composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); }
+  camera.fov = prefs.fov; camera.updateProjectionMatrix(); player.setSens?.(prefs.sens); player.setFov?.(prefs.fov);
+  $('fps').style.display = prefs.fps ? '' : 'none';
+  document.querySelectorAll('#sQ button').forEach(b => b.classList.toggle('on', +b.dataset.v === q)); $('sQh').textContent = QH[q];
+  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps;
+  savePrefs();
+}
+document.querySelectorAll('#sQ button').forEach(b => b.onclick = () => { prefs.q = +b.dataset.v; applySettings(); });
+$('sSens').oninput = e => { prefs.sens = +e.target.value; applySettings(); }; $('sFov').oninput = e => { prefs.fov = +e.target.value; applySettings(); };
+$('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); };
+const openSet = () => $('setm').classList.add('on'); $('setBtn').onclick = openSet; $('bSet').onclick = openSet; $('sClose').onclick = () => $('setm').classList.remove('on');
+// Enter на клавиатуре телефона = готово (клавиатура закрывается)
+['nick', 'code'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (id === 'code') $('bJoin')?.click(); } }));
+applySettings();
 
 // ---------- производительность: реальный FPS (ограничен монитором) + время кадра на GPU ----------
 const gl = renderer.getContext(), tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
@@ -150,7 +185,7 @@ let q = null, gpuMs = 0, qN = 0;
 function renderTimed() {
   const measure = tq && !q && (qN++ % 10 === 0);
   if (measure) { q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); }
-  renderer.render(scene, camera);
+  if (composer && prefs.q === 3) composer.render(); else renderer.render(scene, camera);
   if (measure) gl.endQuery(tq.TIME_ELAPSED_EXT);
   if (q && gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) { if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; gpuMs = gpuMs ? gpuMs * 0.7 + ms * 0.3 : ms; } gl.deleteQuery(q); q = null; }
 }
@@ -171,7 +206,7 @@ function frame() {
   if (n - fT > 500) { const fps = Math.round(fN * 1000 / (n - fT)); const frameMs = Math.max(cpuMs, gpuMs || 0);
     fpsEl.innerHTML = `${fps} FPS <span>кадр ${frameMs.toFixed(1)} мс · запас ≈${Math.round(1000 / Math.max(frameMs, 0.3))} FPS</span>`; fN = 0; fT = n; }
 }
-if (SHOT) {
+if (SHOT) { document.getElementById('loader')?.remove();
   setTimeout(() => {
     if (qp.get('play')) { toGame(false); if (qp.get('view') === 'f') player.look(Math.PI, 0.12, qp.get('d') ? +qp.get('d') : 1.7);
       if (qp.get('slide')) player.debug.set('slide', +qp.get('slide')); if (qp.get('climb')) player.debug.set('climb', +qp.get('climb'));
@@ -184,6 +219,6 @@ if (SHOT) {
     console.log('ms/frame', ((performance.now() - t0) / N).toFixed(2));
     document.title = 'done';
   }, 300);
-} else renderer.setAnimationLoop(frame);
+} else { window.__load?.(88, 'Готовим шейдеры…'); setTimeout(() => { try { renderer.compile(scene, camera); } catch (e) {} window.__load?.(100, 'Готово!'); renderer.setAnimationLoop(frame); }, 30); }
 
 if ('serviceWorker' in navigator && !SHOT) navigator.serviceWorker.register('sw.js').catch(() => {});

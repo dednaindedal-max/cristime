@@ -68,7 +68,7 @@ export function createFestive({ scene, map, camera }) {
   const sign2 = sign.clone(); sign2.rotation.y = Math.PI; sign2.position.z = -0.01; arch.add(sign2); sign.position.z = 0.01;
 
   // ---------- портал «Мини-игры — скоро» ----------
-  const portal = new THREE.Group(); portal.position.set(-2.5, 0, 10.2); portal.rotation.y = Math.atan2(C.x + 2.5, C.z - 10.2); root.add(portal);
+  const portal = new THREE.Group(); portal.position.set(-3.1, 0, 11.4); portal.rotation.y = Math.atan2(C.x + 3.1, C.z - 11.4); root.add(portal);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.13, 12, 48), new THREE.MeshStandardMaterial({ color: 0x9a6bff, emissive: 0x7a4bff, emissiveIntensity: 1.2, roughness: 0.3 }));
   ring.position.y = 1.25; portal.add(ring);
   const swirlU = { uT: { value: 0 } };

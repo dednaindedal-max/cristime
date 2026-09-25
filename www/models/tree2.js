@@ -15,6 +15,11 @@ export function createTree2() {
     new THREE.Vector2(0, 0), new THREE.Vector2(0.55, 0), new THREE.Vector2(0.5, 0.1),
     new THREE.Vector2(0.4, 0.45), new THREE.Vector2(0.33, 0.95), new THREE.Vector2(0.3, 1.5), new THREE.Vector2(0, 1.5)], 12), bark)));
 
+  // снежный холмик у основания — ствол «сидит» в сугробе, а не висит над землёй
+  const mound = cs(new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2), snow));
+  mound.scale.set(1, 0.32, 1); mound.position.y = -0.08; tree.add(mound);
+  for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283 + 0.4, m2 = cs(new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), snow));
+    m2.scale.set(1.2, 0.45, 0.9); m2.position.set(Math.cos(a) * 0.8, -0.05, Math.sin(a) * 0.8); m2.rotation.y = -a; tree.add(m2); }
   const tiers = [
     { y: 1.1,  r: 1.7,  h: 1.3 },
     { y: 2.05, r: 1.45, h: 1.15 },

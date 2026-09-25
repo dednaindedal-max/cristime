@@ -18,11 +18,23 @@
 <link rel="icon" href="icon-192.png">
 </head>
 <body>
+<div id="loader"><div class="lbx"><div class="lt">❄ CRISTIME ❄</div><div class="lbar"><i id="lfill"></i></div><div class="lp"><span id="ltxt">Загрузка…</span><b id="lpct">0%</b></div></div></div>
+<script>(function(){var p=0,t=0,f=document.getElementById('lfill'),c=document.getElementById('lpct'),x=document.getElementById('ltxt');
+window.__load=function(v,txt){t=Math.max(t,v);if(txt)x.textContent=txt;};window.__load(62,'Загружаем движок…');
+(function a(){p+=(t-p)*0.08+0.05;if(p>t)p=t;f.style.width=p+'%';c.textContent=Math.floor(p)+'%';
+if(p>=99.9&&t>=100){var L=document.getElementById('loader');L.style.opacity=0;setTimeout(function(){L.remove()},600);return;}requestAnimationFrame(a);})();})();</script>
+<div id="setm"><div class="sbox"><b class="st">⚙ Настройки</b>
+  <label>Графика</label><div class="seg" id="sQ"><button data-v="0">Низкая</button><button data-v="1">Средняя</button><button data-v="2">Высокая</button><button data-v="3">✨ Ультра</button></div>
+  <div class="sh" id="sQh"></div>
+  <label>Чувствительность <span id="sSv"></span></label><input type="range" id="sSens" min="0.3" max="2.5" step="0.05">
+  <label>Поле зрения <span id="sFv"></span></label><input type="range" id="sFov" min="55" max="95" step="1">
+  <label class="chk"><input type="checkbox" id="sFps"> Показывать FPS</label>
+  <button class="sclose" id="sClose">Готово</button></div></div>
 <div id="app"></div>
 <div id="fps"></div>
 <div id="menu">
   <button id="menuBtn">☰ Меню</button>
-  <button id="fsBtn">⛶</button>
+  <button id="setBtn">⚙</button>
 </div>
 <div id="room"><div class="rc">Комната <b id="rCode">—</b> <button id="rCopy">🔗 Пригласить</button><button id="rAdd" style="display:none">➕ Игрок</button></div><div id="rList"></div></div>
 <div id="toast"></div>
@@ -46,7 +58,7 @@
       <button class="big blue" id="bJoinScr">🔗 Подключиться</button>
       <button class="big orange" id="bLan">📡 Без интернета</button>
       <button class="big ghost" id="bSolo">🚶 Играть одному</button>
-      <div class="row"><button class="small" id="bFs">⛶ Полный экран</button></div>
+      <div class="row"><button class="small" id="bSet">⚙ Настройки</button></div>
     </div>
     <div class="scr" id="scrJoin" style="display:none">
       <label>Код комнаты</label>
