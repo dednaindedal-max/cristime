@@ -15,7 +15,7 @@ jobs:
       - name: Manifest (landscape, camera, fullscreen, icon)
         run: |
           M=android/app/src/main/AndroidManifest.xml
-          sed -i 's#<activity#<activity android:screenOrientation="sensorLandscape"#' $M
+          sed -i 's#<activity#<activity android:screenOrientation="sensorLandscape" android:hardwareAccelerated="true"#' $M
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />#' $M
           sed -i 's#AppTheme.NoActionBarLaunch#Theme.AppCompat.NoActionBar.FullScreen#; s#"@style/AppTheme.NoActionBar"#"@style/Theme.AppCompat.NoActionBar.FullScreen"#' $M || true
           R=android/app/src/main/res
@@ -25,6 +25,7 @@ jobs:
           <resources><style name="Theme.AppCompat.NoActionBar.FullScreen" parent="Theme.AppCompat.NoActionBar"><item name="android:windowFullscreen">true</item><item name="android:windowBackground">#0b1030</item></style></resources>
           X
           cat $M
+      - run: cp native/MainActivity.java android/app/src/main/java/app/cristime/game/MainActivity.java
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk Cristime.apk
       - uses: actions/upload-artifact@v4

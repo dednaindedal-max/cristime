@@ -149,13 +149,23 @@ toLobby();
 const urlRoom = qp.get('room');
 if (urlRoom) { $('scrMain').style.display = 'none'; $('scrJoin').style.display = ''; $('code').value = urlRoom.toUpperCase(); status('Приглашение в комнату ' + urlRoom.toUpperCase() + ' — нажми «Войти»'); }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight); });
+// ---------- авто-разрешение: держим частоту экрана (90/120/144 Гц), снижая чёткость только если GPU не успевает ----------
+let hzMax = 60, resK = 1;
+function autoRes(fps, ms) {
+  if (SHOT) return; hzMax = Math.max(hzMax, fps); const budget = 1000 / hzMax;
+  const old = resK;
+  if (ms > budget * 0.85 && fps < hzMax * 0.92) resK = Math.max(0.55, resK - 0.08);
+  else if (ms < budget * 0.5 && resK < 1) resK = Math.min(1, resK + 0.04);
+  if (old !== resK) { renderer.setPixelRatio(basePR * resK); renderer.setSize(innerWidth, innerHeight); composer?.setPixelRatio(renderer.getPixelRatio()); composer?.setSize(innerWidth, innerHeight); }
+}
+let basePR = 1;
 // ---------- настройки ----------
 let composer = null, bloom = null;
 const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
 prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true;
 function applySettings() {
   const q = prefs.q, dpr = devicePixelRatio;
-  renderer.setPixelRatio(SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]);
+  basePR = SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]; resK = 1; renderer.setPixelRatio(basePR);
   renderer.setSize(innerWidth, innerHeight);
   const sm = [512, 1024, 2048, 4096][q]; sun.castShadow = q > 0;
   if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); sun.shadow.map = null; }
@@ -204,6 +214,7 @@ function frame() {
   cpuMs = cpuMs * 0.9 + (performance.now() - t0) * 0.1;
   fN++; const n = performance.now();
   if (n - fT > 500) { const fps = Math.round(fN * 1000 / (n - fT)); const frameMs = Math.max(cpuMs, gpuMs || 0);
+    autoRes(fps, frameMs);
     fpsEl.innerHTML = `${fps} FPS <span>кадр ${frameMs.toFixed(1)} мс · запас ≈${Math.round(1000 / Math.max(frameMs, 0.3))} FPS</span>`; fN = 0; fT = n; }
 }
 if (SHOT) { document.getElementById('loader')?.remove();
