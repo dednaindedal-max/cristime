@@ -20,7 +20,7 @@ jobs:
           sed -i 's#AppTheme.NoActionBarLaunch#Theme.AppCompat.NoActionBar.FullScreen#; s#"@style/AppTheme.NoActionBar"#"@style/Theme.AppCompat.NoActionBar.FullScreen"#' $M || true
           R=android/app/src/main/res
           rm -rf $R/mipmap-anydpi-v26
-          for d in $R/mipmap-*; do cp www/icon-192.png $d/ic_launcher.png; cp www/icon-192.png $d/ic_launcher_round.png; cp www/icon-192.png $d/ic_launcher_foreground.png; done
+          for d in $R/mipmap-*; do cp pack/icon.png $d/ic_launcher.png; cp pack/icon.png $d/ic_launcher_round.png; cp pack/icon.png $d/ic_launcher_foreground.png; done
           cat > $R/values/fs.xml <<'X'
           <resources><style name="Theme.AppCompat.NoActionBar.FullScreen" parent="Theme.AppCompat.NoActionBar"><item name="android:windowFullscreen">true</item><item name="android:windowBackground">#0b1030</item></style></resources>
           X
