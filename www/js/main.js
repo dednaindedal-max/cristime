@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createMap } from '../models/map.js';
 import { createPlayer } from './player.js';
-import { createNet } from './net.js';
+import { createNet, nativeHz } from './net.js';
 import { createSnowballs } from './snow.js';
 import { createFestive } from './festive.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -150,19 +150,21 @@ const urlRoom = qp.get('room');
 if (urlRoom) { $('scrMain').style.display = 'none'; $('scrJoin').style.display = ''; $('code').value = urlRoom.toUpperCase(); status('Приглашение в комнату ' + urlRoom.toUpperCase() + ' — нажми «Войти»'); }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight); });
 // ---------- авто-разрешение: держим частоту экрана (90/120/144 Гц), снижая чёткость только если GPU не успевает ----------
-let hzMax = 60, resK = 1;
+let hzMax = 60, resK = 1, lowN = 0, highN = 0;
+nativeHz().then(h => { if (h) hzMax = Math.round(h); });
+// Время JS/GPU на телефоне меряется неточно, поэтому решаем по реальному FPS: если кадры не успевают к частоте экрана
+// 2 замера подряд — чуть уменьшаем внутреннее разрешение; если FPS стабильно на максимуме — возвращаем чёткость.
 function autoRes(fps, ms) {
-  if (SHOT) return; hzMax = Math.max(hzMax, fps); const budget = 1000 / hzMax;
-  const old = resK;
-  if (ms > budget * 0.85 && fps < hzMax * 0.92) resK = Math.max(0.55, resK - 0.08);
-  else if (ms < budget * 0.5 && resK < 1) resK = Math.min(1, resK + 0.04);
+  if (SHOT || !prefs.autoRes) return; hzMax = Math.max(hzMax, fps); const old = resK;
+  if (fps < hzMax * 0.9) { highN = 0; if (++lowN >= 2) { resK = Math.max(0.6, resK - 0.07); lowN = 0; } }
+  else { lowN = 0; if (resK < 1 && ++highN >= 8) { resK = Math.min(1, resK + 0.05); highN = 0; } }
   if (old !== resK) { renderer.setPixelRatio(basePR * resK); renderer.setSize(innerWidth, innerHeight); composer?.setPixelRatio(renderer.getPixelRatio()); composer?.setSize(innerWidth, innerHeight); }
 }
 let basePR = 1;
 // ---------- настройки ----------
 let composer = null, bloom = null;
 const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
-prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true;
+prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.autoRes = prefs.autoRes ?? true;
 function applySettings() {
   const q = prefs.q, dpr = devicePixelRatio;
   basePR = SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]; resK = 1; renderer.setPixelRatio(basePR);
@@ -178,12 +180,12 @@ function applySettings() {
   camera.fov = prefs.fov; camera.updateProjectionMatrix(); player.setSens?.(prefs.sens); player.setFov?.(prefs.fov);
   $('fps').style.display = prefs.fps ? '' : 'none';
   document.querySelectorAll('#sQ button').forEach(b => b.classList.toggle('on', +b.dataset.v === q)); $('sQh').textContent = QH[q];
-  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps;
+  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps; $('sAuto').checked = prefs.autoRes;
   savePrefs();
 }
 document.querySelectorAll('#sQ button').forEach(b => b.onclick = () => { prefs.q = +b.dataset.v; applySettings(); });
 $('sSens').oninput = e => { prefs.sens = +e.target.value; applySettings(); }; $('sFov').oninput = e => { prefs.fov = +e.target.value; applySettings(); };
-$('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); };
+$('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); }; $('sAuto').onchange = e => { prefs.autoRes = e.target.checked; applySettings(); };
 const openSet = () => $('setm').classList.add('on'); $('setBtn').onclick = openSet; $('bSet').onclick = openSet; $('sClose').onclick = () => $('setm').classList.remove('on');
 // Enter на клавиатуре телефона = готово (клавиатура закрывается)
 ['nick', 'code'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (id === 'code') $('bJoin')?.click(); } }));
@@ -215,7 +217,7 @@ function frame() {
   fN++; const n = performance.now();
   if (n - fT > 500) { const fps = Math.round(fN * 1000 / (n - fT)); const frameMs = Math.max(cpuMs, gpuMs || 0);
     autoRes(fps, frameMs);
-    fpsEl.innerHTML = `${fps} FPS <span>кадр ${frameMs.toFixed(1)} мс · запас ≈${Math.round(1000 / Math.max(frameMs, 0.3))} FPS</span>`; fN = 0; fT = n; }
+    fpsEl.innerHTML = `${fps} / ${hzMax} FPS <span>кадр ${frameMs.toFixed(1)} мс · чёткость ${Math.round(resK * 100)}%</span>`; fN = 0; fT = n; }
 }
 if (SHOT) { document.getElementById('loader')?.remove();
   setTimeout(() => {

@@ -38,8 +38,11 @@ public class LanNetPlugin extends Plugin {
         if (s.equals("CRISTIME?" + code)) { byte[] r = ("CRISTIME!" + code).getBytes(StandardCharsets.UTF_8); udp.send(new DatagramPacket(r, r.length, p.getAddress(), p.getPort())); }
       } catch (Exception e) { if (!running) break; } } }).start();
     new Thread(() -> { while (running) { try { final Socket s = server.accept(); s.setTcpNoDelay(true); final int id; synchronized (this) { id = nextId++; }
-        clients.put(id, new PrintWriter(new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8), true)); socks.put(id, s); emit("open", id, null);
         new Thread(() -> { try { BufferedReader in = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8)); String l;
+            s.setSoTimeout(5000); String hello = in.readLine(); s.setSoTimeout(0);
+            PrintWriter w = new PrintWriter(new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8), true);
+            if (hello == null || !hello.equals("HELLO " + code)) { w.println("BAD"); s.close(); return; }
+            w.println("OK"); clients.put(id, w); socks.put(id, s); emit("open", id, null);
             while ((l = in.readLine()) != null) emit("msg", id, l); } catch (Exception e) {}
           clients.remove(id); socks.remove(id); try { s.close(); } catch (Exception e) {} emit("close", id, null); }).start();
       } catch (Exception e) { if (!running) break; } } }).start();
@@ -55,6 +58,12 @@ public class LanNetPlugin extends Plugin {
   @PluginMethod public void join(PluginCall call) {
     stopAll(); final String code = call.getString("code", ""); final int wait = call.getInt("timeout", 2500); running = true; lock();
     new Thread(() -> {
+      // 1) в раздаче хост = шлюз Wi-Fi: пробуем подключиться к нему напрямую
+      try { WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        int gw = wm.getDhcpInfo().gateway;
+        if (gw != 0) { InetAddress ip = InetAddress.getByAddress(new byte[] { (byte) (gw & 255), (byte) (gw >> 8 & 255), (byte) (gw >> 16 & 255), (byte) (gw >> 24 & 255) });
+          if (tryConnect(ip, code, call)) return; } } catch (Throwable t) {}
+      // 2) иначе ищем хоста в сети широковещательным запросом
       InetAddress hostIp = null;
       try (DatagramSocket ds = new DatagramSocket()) { ds.setBroadcast(true); ds.setSoTimeout(300);
         byte[] q = ("CRISTIME?" + code).getBytes(StandardCharsets.UTF_8); long end = System.currentTimeMillis() + wait; byte[] buf = new byte[256];
@@ -64,16 +73,26 @@ public class LanNetPlugin extends Plugin {
             if (new String(p.getData(), 0, p.getLength(), StandardCharsets.UTF_8).equals("CRISTIME!" + code)) hostIp = p.getAddress(); } catch (SocketTimeoutException e) {}
         }
       } catch (Exception e) {}
-      if (hostIp == null) { call.reject("notfound"); return; }
-      try { guest = new Socket(); guest.setTcpNoDelay(true); guest.connect(new InetSocketAddress(hostIp, TCP), 3000);
-        guestOut = new PrintWriter(new OutputStreamWriter(guest.getOutputStream(), StandardCharsets.UTF_8), true);
-      } catch (Exception e) { call.reject("connect: " + e.getMessage()); return; }
-      JSObject r = new JSObject(); r.put("ip", hostIp.getHostAddress()); call.resolve(r);
-      final Socket g = guest;
-      try { BufferedReader in = new BufferedReader(new InputStreamReader(g.getInputStream(), StandardCharsets.UTF_8)); String l;
-        while ((l = in.readLine()) != null) emit("msg", 0, l); } catch (Exception e) {}
-      if (g == guest) emit("close", 0, null);
+      if (hostIp == null || !tryConnect(hostIp, code, call)) call.reject("notfound");
     }).start();
+  }
+  private boolean tryConnect(InetAddress ip, String code, PluginCall call) {
+    Socket g = new Socket();
+    try { g.setTcpNoDelay(true); g.connect(new InetSocketAddress(ip, TCP), 1500); g.setSoTimeout(2500);
+      BufferedReader in = new BufferedReader(new InputStreamReader(g.getInputStream(), StandardCharsets.UTF_8));
+      PrintWriter w = new PrintWriter(new OutputStreamWriter(g.getOutputStream(), StandardCharsets.UTF_8), true);
+      w.println("HELLO " + code); String r = in.readLine();
+      if (!"OK".equals(r)) { g.close(); return false; }
+      g.setSoTimeout(0); guest = g; guestOut = w;
+      JSObject o = new JSObject(); o.put("ip", ip.getHostAddress()); call.resolve(o);
+      new Thread(() -> { try { String l; while ((l = in.readLine()) != null) emit("msg", 0, l); } catch (Exception e) {}
+        if (g == guest) emit("close", 0, null); }).start();
+      return true;
+    } catch (Exception e) { try { g.close(); } catch (Exception x) {} return false; }
+  }
+  @PluginMethod public void hz(PluginCall call) {
+    float hz = 60; try { android.view.Display d = getActivity().getWindowManager().getDefaultDisplay(); for (android.view.Display.Mode m : d.getSupportedModes()) hz = Math.max(hz, m.getRefreshRate()); } catch (Throwable t) {}
+    JSObject o = new JSObject(); o.put("hz", hz); call.resolve(o);
   }
 
   // send: c = -1 всем клиентам (хост) или хосту (гость); c > 0 конкретному; skip — кроме этого

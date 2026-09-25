@@ -6,6 +6,7 @@ import { registerPlugin, Capacitor } from '../vendor/capcore.js';
 // в приложении (APK) — нативная локальная сеть: работает в раздаче вообще без интернета
 const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform?.());
 const LN = NATIVE ? registerPlugin('LanNet') : null;
+export const nativeHz = () => LN ? LN.hz().then(r => r.hz).catch(() => 0) : Promise.resolve(0);
 
 // Онлайн без своего сервера: игроки находят друг друга через публичные nostr-реле (много серверов по миру,
 // нужен совсем слабый интернет — хватает EDGE), дальше игра идёт напрямую P2P (WebRTC).
