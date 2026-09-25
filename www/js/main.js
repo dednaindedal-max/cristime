@@ -167,7 +167,10 @@ let portalCd = 0;
 toLobby();
 const urlRoom = qp.get('room');
 if (urlRoom) { $('scrMain').style.display = 'none'; $('scrJoin').style.display = ''; $('code').value = urlRoom.toUpperCase(); status('Приглашение в комнату ' + urlRoom.toUpperCase() + ' — нажми «Войти»'); }
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight); });
+// размер меняем только если он реально изменился (и с задержкой) — иначе на Android при показе/скрытии панелей экран моргает
+let lastW = innerWidth, lastH = innerHeight, rzT = 0;
+addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (innerWidth === lastW && innerHeight === lastH) return; lastW = innerWidth; lastH = innerHeight;
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer?.setSize(innerWidth, innerHeight); }, 150); });
 // ---------- авто-разрешение: держим частоту экрана (90/120/144 Гц), снижая чёткость только если GPU не успевает ----------
 let hzMax = 60, resK = 1, lowN = 0, highN = 0;
 nativeHz().then(h => { if (h) hzMax = Math.round(h); });
@@ -193,7 +196,7 @@ function footsteps(dt) {
 // ---------- настройки ----------
 let composer = null, bloom = null;
 const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
-prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.vol = prefs.vol ?? 0.8; prefs.autoRes = prefs.autoRes2 ?? false;
+prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.vol = prefs.vol ?? 0.8; prefs.lim = prefs.lim ?? 0; prefs.autoRes = prefs.autoRes2 ?? false;
 function applySettings() {
   const q = prefs.q, dpr = devicePixelRatio;
   basePR = SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]; resK = 1; renderer.setPixelRatio(basePR);
@@ -209,11 +212,12 @@ function applySettings() {
   camera.fov = prefs.fov; camera.updateProjectionMatrix(); player.setSens?.(prefs.sens); player.setFov?.(prefs.fov);
   $('fps').style.display = prefs.fps ? '' : 'none';
   document.querySelectorAll('#sQ button').forEach(b => b.classList.toggle('on', +b.dataset.v === q)); $('sQh').textContent = QH[q];
-  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps; $('sVol').value = prefs.vol; $('sVv').textContent = Math.round(prefs.vol * 100) + '%'; sfx.setVolume(prefs.vol); $('sAuto').checked = prefs.autoRes;
+  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps; document.querySelectorAll('#sLim button').forEach(b => b.classList.toggle('on', +b.dataset.v === prefs.lim)); $('sVol').value = prefs.vol; $('sVv').textContent = Math.round(prefs.vol * 100) + '%'; sfx.setVolume(prefs.vol); $('sAuto').checked = prefs.autoRes;
   savePrefs();
 }
 document.querySelectorAll('#sQ button').forEach(b => b.onclick = () => { prefs.q = +b.dataset.v; applySettings(); });
 $('sSens').oninput = e => { prefs.sens = +e.target.value; applySettings(); }; $('sFov').oninput = e => { prefs.fov = +e.target.value; applySettings(); };
+document.querySelectorAll('#sLim button').forEach(b => b.onclick = () => { prefs.lim = +b.dataset.v; applySettings(); });
 $('sVol').oninput = e => { prefs.vol = +e.target.value; applySettings(); };
 $('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); }; $('sAuto').onchange = e => { prefs.autoRes = prefs.autoRes2 = e.target.checked; applySettings(); };
 const openSet = () => $('setm').classList.add('on'); $('setBtn').onclick = openSet; $('bSet').onclick = openSet; $('sClose').onclick = () => $('setm').classList.remove('on');
@@ -233,8 +237,11 @@ function renderTimed() {
 }
 const clock = new THREE.Clock();
 const fpsEl = $('fps'); let fN = 0, fT = performance.now(), cpuMs = 0;
-function frame() {
+let lastR = 0;
+function frame(ts) {
   const t0 = performance.now();
+  if (prefs.lim && t0 - lastR < 1000 / prefs.lim - 1.5) return;     // лимит FPS (меньше нагрев)
+  lastR = t0;
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   map.userData.update(t); festive.update(dt, t);
   if (state === 'lobby') { lobbyCam(t, dt); snowUI(t); } else {

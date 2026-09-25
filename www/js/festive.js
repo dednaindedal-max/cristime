@@ -92,7 +92,7 @@ export function createFestive({ scene, map, camera, onSfx }) {
   const PN = 7000;
   const P = { p: new Float32Array(PN * 3), o: new Float32Array(PN * 3), v: new Float32Array(PN * 3), c: new Float32Array(PN * 3), c2: new Float32Array(PN * 3),
     life: new Float32Array(PN), max: new Float32Array(PN), drag: new Float32Array(PN), grav: new Float32Array(PN), size: new Float32Array(PN), tw: new Uint8Array(PN), sub: new Uint8Array(PN) };
-  let pHead = 0;
+  let pHead = 0, alive = 0;
   const hp = new Float32Array(PN * 3), hc = new Float32Array(PN * 3), hs = new Float32Array(PN);
   const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.BufferAttribute(hp, 3)); hg.setAttribute('color', new THREE.BufferAttribute(hc, 3)); hg.setAttribute('size', new THREE.BufferAttribute(hs, 1));
   const heads = new THREE.Points(hg, new THREE.ShaderMaterial({ uniforms: { uTex: { value: glowTex }, uPx: { value: Math.min(innerHeight, 900) / 700 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
@@ -108,7 +108,7 @@ export function createFestive({ scene, map, camera, onSfx }) {
     const i = pHead; pHead = (pHead + 1) % PN; const j = i * 3;
     P.p[j] = P.o[j] = x; P.p[j + 1] = P.o[j + 1] = y; P.p[j + 2] = P.o[j + 2] = z; P.v[j] = vx; P.v[j + 1] = vy; P.v[j + 2] = vz;
     P.c[j] = col.r; P.c[j + 1] = col.g; P.c[j + 2] = col.b; const c2 = o.c2 || col; P.c2[j] = c2.r; P.c2[j + 1] = c2.g; P.c2[j + 2] = c2.b;
-    P.max[i] = P.life[i] = o.life ?? 1.8; P.drag[i] = o.drag ?? 1.6; P.grav[i] = o.grav ?? 2.2; P.size[i] = o.size ?? 0.5; P.tw[i] = o.tw ? 1 : 0; P.sub[i] = o.sub ? 1 : 0;
+    if (P.life[i] <= 0) alive++; P.max[i] = P.life[i] = o.life ?? 1.8; P.drag[i] = o.drag ?? 1.6; P.grav[i] = o.grav ?? 2.2; P.size[i] = o.size ?? 0.5; P.tw[i] = o.tw ? 1 : 0; P.sub[i] = o.sub ? 1 : 0;
   }
   const rockets = [], flashes = [];
   for (let i = 0; i < 4; i++) { const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, opacity: 0 })); f.scale.setScalar(12); root.add(f); flashes.push({ s: f, t: 0 }); }
@@ -144,10 +144,10 @@ export function createFestive({ scene, map, camera, onSfx }) {
       if (r.fuse <= 0) { explode(r); rockets.splice(k, 1); } }
     flashes.forEach(f => { if (f.t > 0) { f.t -= dt; f.s.material.opacity = Math.max(0, f.t / 0.35) * 0.9; } });
     let nh = 0;
-    for (let i = 0; i < PN; i++) {
-      if (P.life[i] <= 0) continue; const j = i * 3;
-      P.life[i] -= dt; const k = Math.max(0, P.life[i] / P.max[i]);
-      if (P.sub[i] && k < 0.45) { P.sub[i] = 0; P.life[i] = 0; const col = new THREE.Color(P.c[j], P.c[j + 1], P.c[j + 2]);
+    for (let i = 0, seen = 0; i < PN && seen < alive; i++) {
+      if (P.life[i] <= 0) continue; seen++; const j = i * 3;
+      P.life[i] -= dt; if (P.life[i] <= 0) alive--; const k = Math.max(0, P.life[i] / P.max[i]);
+      if (P.sub[i] && k < 0.45) { P.sub[i] = 0; if (P.life[i] > 0) alive--; P.life[i] = 0; const col = new THREE.Color(P.c[j], P.c[j + 1], P.c[j + 2]);
         for (let e = 0; e < 14; e++) { const th = Math.random() * 6.283, u = Math.random() * 2 - 1, q = Math.sqrt(1 - u * u); emit(P.p[j], P.p[j + 1], P.p[j + 2], q * Math.cos(th) * 5, u * 5, q * Math.sin(th) * 5, e % 2 ? col : white, { life: 0.9, size: 0.35, tw: true }); } continue; }
       const dr = Math.exp(-P.drag[i] * dt);
       P.o[j] = P.p[j]; P.o[j + 1] = P.p[j + 1]; P.o[j + 2] = P.p[j + 2];

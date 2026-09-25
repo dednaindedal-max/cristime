@@ -4,6 +4,24 @@ export function createAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   let ctx = null, master, sfx, amb, noiseBuf, fire = null, slide = null, wind = null, vol = 0.8;
   const listener = { x: 0, y: 0, z: 0, rx: 1, rz: 0 };
+  // настоящие записи (CC0): шаги по снегу, дерево, мягкие удары, салюты, костёр, взмах — sfx/*.ogg
+  const B = {}, LIST = { snow: 5, wood: 5, soft: 5, fw: [1, 2, 3, 4, 5, 6], fire: 0, whoosh: 0 };
+  async function loadAll() {
+    const jobs = [];
+    for (const [k, n] of Object.entries(LIST)) {
+      const names = Array.isArray(n) ? n.map(i => k + i) : n ? [...Array(n).keys()].map(i => k + i) : [k];
+      B[k] = [];
+      names.forEach(nm => jobs.push(fetch('sfx/' + nm + '.ogg').then(r => r.arrayBuffer()).then(a => new Promise((ok, no) => ctx.decodeAudioData(a, ok, no))).then(b => B[k].push(b)).catch(() => {})));
+    }
+    await Promise.all(jobs); if (B.fire?.length) startFireLoop();
+  }
+  // проиграть случайный вариант записи в точке p
+  function play(k, p, gain = 1, rate = 1, ref = 2, max = 30, delay = 0) {
+    const list = B[k]; if (!list || !list.length) return false;
+    const o = out(p, gain, ref, max); if (o.g < 0.01) return true;
+    const src = ctx.createBufferSource(); src.buffer = list[Math.random() * list.length | 0]; src.playbackRate.value = rate;
+    src.connect(o.node); src.start(now() + delay); return true;
+  }
 
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -16,7 +34,7 @@ export function createAudio() {
     // 2 с белого шума — основа для снега, огня, ветра, взрывов
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    startFire(); startSlide(); startWind();
+    startSlide(); startWind(); loadAll();
   }
   ['pointerdown', 'touchstart', 'keydown'].forEach(e => addEventListener(e, init, { passive: true }));
 
@@ -39,7 +57,8 @@ export function createAudio() {
 
   // ---------- шаг по снегу: хруст = несколько коротких фильтрованных шумовых «зёрен» ----------
   function step(p, run = false, loud = 1) {
-    if (!ctx) return; const t = now(), o = out(p, (run ? 0.55 : 0.42) * loud, 2, 25); if (o.g < 0.01) return;
+    if (!ctx) return;
+    if (play('snow', p, (run ? 0.9 : 0.7) * loud, run ? 1.08 + Math.random() * 0.14 : 0.92 + Math.random() * 0.16, 2, 25)) return; const t = now(), o = out(p, (run ? 0.55 : 0.42) * loud, 2, 25); if (o.g < 0.01) return;
     const grains = 4 + (Math.random() * 3 | 0);
     for (let i = 0; i < grains; i++) {
       const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), tt = t + i * (0.012 + Math.random() * 0.018);
@@ -51,19 +70,22 @@ export function createAudio() {
     env(g, t, 0.01, 0.7, 0.12); s.connect(lp).connect(g).connect(o.node); s.start(t, Math.random(), 0.2);
   }
   function land(p, k = 1) {
-    if (!ctx) return; const t = now(), o = out(p, 0.7 * k, 2, 25); if (o.g < 0.01) return;
+    if (!ctx) return;
+    if (B.snow?.length) { play('snow', p, 1.0 * k, 0.72 + Math.random() * 0.08, 2, 25); play('soft', p, 0.45 * k, 0.7, 2, 25); return; } const t = now(), o = out(p, 0.7 * k, 2, 25); if (o.g < 0.01) return;
     const s = noise(), lp = ctx.createBiquadFilter(), g = ctx.createGain(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(200, t + 0.25);
     env(g, t, 0.005, 1, 0.28); s.connect(lp).connect(g).connect(o.node); s.start(t, Math.random(), 0.4);
     step(p, true, 0.8);
   }
   function jump(p) {
-    if (!ctx) return; const t = now(), o = out(p, 0.25, 2, 20);
+    if (!ctx) return;
+    if (play('whoosh', p, 0.25, 1.7 + Math.random() * 0.2, 2, 20)) { play('snow', p, 0.5, 1.2, 2, 20); return; } const t = now(), o = out(p, 0.25, 2, 20);
     const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(600, t); bp.frequency.exponentialRampToValueAtTime(1800, t + 0.15); bp.Q.value = 1.5;
     env(g, t, 0.01, 0.6, 0.15); s.connect(bp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
   }
   // ---------- деревянная ступенька лестницы ----------
   function rung(p) {
-    if (!ctx) return; const t = now(), o = out(p, 0.35, 2, 25);
+    if (!ctx) return;
+    if (play('wood', p, 0.55, 0.95 + Math.random() * 0.15, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
     const os = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter(); os.type = 'triangle';
     os.frequency.setValueAtTime(190 + Math.random() * 40, t); os.frequency.exponentialRampToValueAtTime(120, t + 0.08);
     bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 2; env(g, t, 0.002, 0.8, 0.09);
@@ -73,13 +95,15 @@ export function createAudio() {
   }
   // ---------- снежок ----------
   function throwBall(p) {
-    if (!ctx) return; const t = now(), o = out(p, 0.35, 2, 25);
+    if (!ctx) return;
+    if (play('whoosh', p, 0.45, 1.25 + Math.random() * 0.15, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
     const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(); bp.type = 'bandpass'; bp.Q.value = 2.5;
     bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(2400, t + 0.18);
     env(g, t, 0.03, 0.8, 0.18); s.connect(bp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
   }
   function splat(p) {
-    if (!ctx) return; const t = now(), o = out(p, 0.6, 2.5, 35); if (o.g < 0.01) return;
+    if (!ctx) return;
+    if (play('soft', p, 0.8, 0.85 + Math.random() * 0.3, 2.5, 35)) { play('snow', p, 0.5, 1.3, 2.5, 35); return; } const t = now(), o = out(p, 0.6, 2.5, 35); if (o.g < 0.01) return;
     const s = noise(), lp = ctx.createBiquadFilter(), g = ctx.createGain(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2500, t); lp.frequency.exponentialRampToValueAtTime(300, t + 0.2);
     env(g, t, 0.002, 1, 0.2); s.connect(lp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
     for (let i = 0; i < 3; i++) { const s2 = noise(), bp = ctx.createBiquadFilter(), g2 = ctx.createGain(), tt = t + 0.02 + i * 0.02;
@@ -105,6 +129,7 @@ export function createAudio() {
   }
   function boom(p, crackle = false) {
     if (!ctx) return; const { g, pan, d } = spatial(p, 15, 160); if (g < 0.01) return; const t = now() + d / 340;
+    if (play('fw', p, 1.0, 0.9 + Math.random() * 0.2, 15, 160, d / 340)) return;
     const gn = ctx.createGain(), pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null; gn.gain.value = 0.9 * g;
     if (pn) { pn.pan.value = pan * 0.6; gn.connect(pn).connect(sfx); } else gn.connect(sfx);
     // удар
@@ -122,6 +147,12 @@ export function createAudio() {
   }
   // ---------- костёр: непрерывное шипение + случайные щелчки поленьев; громкость по расстоянию ----------
   let firePos = null;
+  function startFireLoop() {
+    const src = ctx.createBufferSource(); src.buffer = B.fire[0]; src.loop = true;
+    const pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null, bus = ctx.createGain(); bus.gain.value = 0;
+    if (pn) src.connect(bus).connect(pn).connect(amb); else src.connect(bus).connect(amb);
+    src.start(0, Math.random() * 20); fire = { bus, pn, popT: 9e9, sample: true };
+  }
   function startFire() {
     const s = noise(true), bp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
     bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.5; lp.type = 'lowpass'; lp.frequency.value = 2500; g.gain.value = 0;
@@ -164,7 +195,7 @@ export function createAudio() {
     listener.x = cam.position.x; listener.y = cam.position.y; listener.z = cam.position.z;
     const e = cam.matrixWorld.elements; listener.rx = e[0]; listener.rz = e[2];
     if (fire && firePos) { const { g, pan } = spatial(firePos, 2.2, 22); fire.bus.gain.setTargetAtTime(g * 0.9, now(), 0.1); if (fire.pn) fire.pn.pan.setTargetAtTime(pan * 0.8, now(), 0.1);
-      fire.popT -= dt; if (fire.popT <= 0) { fire.popT = 0.05 + Math.random() * 0.35; if (g > 0.02) firePop(g * 0.8, pan * 0.8); } }
+      if (!fire.sample) fire.popT -= dt; if (fire.popT <= 0) { fire.popT = 0.05 + Math.random() * 0.35; if (g > 0.02) firePop(g * 0.8, pan * 0.8); } }
     if (slide) { const k = st && st.sliding ? Math.min(1, st.speed / 6) : 0; slide.g.gain.setTargetAtTime(k * 0.35, now(), 0.08); slide.bp.frequency.setTargetAtTime(900 + k * 1600, now(), 0.1); }
     bellT -= dt; if (bellT <= 0) { bellT = 18 + Math.random() * 25; bells(); }
   }
