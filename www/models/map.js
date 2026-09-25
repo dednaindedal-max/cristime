@@ -34,18 +34,29 @@ export function createMap() {
   // склейка + кэш одинаковых моделей (ели, скамейки, фонари...) — одна геометрия на все копии
   let instDirty = false, inst = [];
   // ели разбиты на участки 9×9 м: камера рисует только те участки, что в кадре (frustum culling) — картинка та же, треугольников в разы меньше
+  let lodCells = [];
   function syncInstances() {
     if (!CACHE.tree2) return;
+    if (!CACHE.tree2lo) CACHE.tree2lo = [1, 2].map(l => { const o = createTree2({ lod: l }); bake(o, { keepLights: false }); return o.children.map(c => ({ g: c.geometry, m: c.material, cs: c.castShadow })); });
     const trees = items.filter(o => o.userData.type === 'tree2');
-    inst.forEach(im => { map.remove(im); im.dispose(); }); inst = [];
+    inst.forEach(im => { map.remove(im); im.dispose(); }); inst = []; lodCells = [];
     const cells = new Map();
     trees.forEach(t => { t.updateMatrixWorld(); const k = Math.floor(t.position.x / 9) + ',' + Math.floor(t.position.z / 9); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(t); });
-    for (const list of cells.values()) CACHE.tree2.forEach(c => {
-      const im = new THREE.InstancedMesh(c.g, c.m, list.length); im.castShadow = c.cs; im.receiveShadow = true;
-      list.forEach((t, i) => im.setMatrixAt(i, t.matrixWorld)); im.instanceMatrix.needsUpdate = true;
-      im.computeBoundingSphere(); im.frustumCulled = true; im.matrixAutoUpdate = false; im.updateMatrix(); map.add(im); inst.push(im); });
+    for (const list of cells.values()) {
+      const cen = new THREE.Vector3(); list.forEach(t => cen.add(t.position)); cen.divideScalar(list.length);
+      const lv = [CACHE.tree2, ...CACHE.tree2lo].map((parts, li) => parts.map(c => {
+        const im = new THREE.InstancedMesh(c.g, c.m, list.length); im.castShadow = c.cs; im.receiveShadow = true;
+        list.forEach((t, i) => im.setMatrixAt(i, t.matrixWorld)); im.instanceMatrix.needsUpdate = true;
+        im.computeBoundingSphere(); im.frustumCulled = true; im.matrixAutoUpdate = false; im.updateMatrix(); im.visible = li === 0; map.add(im); inst.push(im); return im; }));
+      lodCells.push({ cen, lv, cur: 0 });
+    }
     instDirty = false;
   }
+  // LOD: рядом — полная ель, дальше 15 м — упрощённая, дальше 28 м — ещё проще (на таком расстоянии разницы не видно)
+  map.userData.lod = (cam) => {
+    for (const c of lodCells) { const d = Math.hypot(cam.x - c.cen.x, cam.z - c.cen.z), want = d < 15 ? 0 : d < 28 ? 1 : 2;
+      if (want !== c.cur) { c.lv[c.cur].forEach(m => m.visible = false); c.lv[want].forEach(m => m.visible = true); c.cur = want; } }
+  };
   const CACHE = {}, CACHED = new Set(['tree2', 'block', 'bench', 'lantern', 'gifts']);
   function register(obj) {
     const type = obj.name; let o = obj;

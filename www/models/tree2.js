@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 // Обычная снежная ель (tree2)
-export function createTree2() {
+export function createTree2(opt = {}) {
+  const LO = !!opt.lod, LO2 = opt.lod === 2;   // дальняя версия (LOD): та же форма, меньше полигонов
   const tree = new THREE.Group();
   tree.name = 'tree2';
   const cs = (m) => { m.castShadow = true; m.receiveShadow = true; return m; };
@@ -27,14 +28,15 @@ export function createTree2() {
     { y: 3.6,  r: 0.75, h: 0.9 },
   ];
   // гранёная "лапка": шестигранник с фаской
-  const lobeGeo = new THREE.CylinderGeometry(0.32, 0.25, 0.24, 6);
-  const blob = new THREE.SphereGeometry(0.3, 7, 4);
+  const lobeGeo = new THREE.CylinderGeometry(0.32, 0.25, 0.24, 6, 1, LO);
+  const blob = LO2 ? new THREE.SphereGeometry(0.3, 4, 2) : LO ? new THREE.SphereGeometry(0.3, 5, 3) : new THREE.SphereGeometry(0.3, 7, 4);
 
   tiers.forEach((t, ti) => {
     const cone = cs(new THREE.Mesh(new THREE.ConeGeometry(t.r * 0.9, t.h, 10), ti % 2 ? green : greenD));
     cone.position.y = t.y + t.h / 2; cone.rotation.y = ti * 0.3; tree.add(cone);
     // два ряда лапок: нижний свисающий и промежуточный
     [[1.0, 0, -0.5], [0.72, t.h * 0.35, -0.35]].forEach(([rf, dy, tilt], row) => {
+      if (LO2 && row) return;
       const n = Math.round(t.r * (row ? 5 : 6.5));
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + ti * 0.4 + row * 0.3;
@@ -50,12 +52,12 @@ export function createTree2() {
     const patches = ti === 3 ? [[0, 6.3]]
       : [[-2.0 + ti * 0.5, 1.2], [-0.4 + ti * 0.3, 1.4], [1.5 + ti * 0.2, 1.1], [3.2 + ti * 0.4, 1.2]];
     patches.forEach(([start, len]) => {
-      const steps = Math.max(3, Math.round(len * 3));
+      const steps = LO ? Math.max(2, Math.round(len * 1.6)) : Math.max(3, Math.round(len * 3));
       for (let k = 0; k <= steps; k++) {
         const u = k / steps, a = start + u * len, e = Math.sin(u * Math.PI);
         const b = cs(new THREE.Mesh(blob, snow));
         const sc = (0.7 + 0.5 * e) * (t.r / 1.4);
-        b.scale.set(sc * 1.3, sc * 0.62, sc * 1.05);
+        b.scale.set(sc * (LO ? 1.6 : 1.3), sc * 0.62, sc * (LO ? 1.25 : 1.05));
         const rr = t.r * (0.7 + 0.08 * e);
         b.position.set(Math.cos(a) * rr, t.y + t.h * 0.28 + 0.06 * e, Math.sin(a) * rr);
         b.rotation.y = -a; tree.add(b);

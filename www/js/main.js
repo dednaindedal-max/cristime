@@ -171,7 +171,7 @@ function applySettings() {
   renderer.setSize(innerWidth, innerHeight);
   const sm = [512, 1024, 2048, 4096][q]; sun.castShadow = q > 0;
   if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-  renderer.shadowMap.type = q >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.type = q >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; renderer.shadowMap.needsUpdate = true;
   scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); });
   if (q === 3) { if (!composer) { composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
       bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.82); composer.addPass(bloom);
@@ -211,7 +211,7 @@ function frame() {
     player.update(dt, t);
     portalCd -= dt; if (portalCd <= 0 && player.pos.distanceTo(festive.portalPos) < 1.1) { portalCd = 4; toast('🎮 Мини-игры скоро появятся! Пока — горка и снежки'); }
   }
-  balls.update(dt, net.myId || 'me'); net.update(dt, t);
+  balls.update(dt, net.myId || 'me'); net.update(dt, t); if ((fN & 7) === 0) map.userData.lod?.(camera.position);
   renderTimed();
   cpuMs = cpuMs * 0.9 + (performance.now() - t0) * 0.1;
   fN++; const n = performance.now();
@@ -226,7 +226,7 @@ if (SHOT) { document.getElementById('loader')?.remove();
       if (qp.get('yaw')) player.look(+qp.get('yaw'), 0.25, 4.5); if (qp.get('fp')) $('pView').click(); if (qp.get('px')) { player.pos.x = +qp.get('px'); player.pos.z = +qp.get('pz'); } }
     const steps = +(qp.get('steps') || 40);
     for (let i = 0; i < steps; i++) { if (qp.get('th') && i === steps - +qp.get('th')) dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); map.userData.update(i * 0.033); festive.update(0.033, i * 0.033); if (state === 'lobby') { lobbyCam(i * 0.033, 0.033); snowUI(i * 0.033); } else player.update(0.033, i * 0.033); }
-    renderer.render(scene, camera); renderer.render(scene, camera);
+    map.userData.lod?.(camera.position); renderer.render(scene, camera); renderer.render(scene, camera);
     console.log('calls', renderer.info.render.calls, 'tris', renderer.info.render.triangles);
     const N = 60, t0 = performance.now(); for (let i = 0; i < N; i++) renderer.render(scene, camera); gl.finish();
     console.log('ms/frame', ((performance.now() - t0) / N).toFixed(2));
