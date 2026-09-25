@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - run: npm install
-      - run: npx cap add android && npx cap sync android && mkdir -p android/app/src/main/assets && cp pack/game.dat android/app/src/main/assets/game.dat
+      - run: npx cap add android && npx cap sync android && mkdir -p android/app/src/main/assets && cp pack/game.dat android/app/src/main/assets/game.dat && rm -rf android/app/src/main/assets/public
       - name: Manifest (landscape, camera, fullscreen, icon)
         run: |
           M=android/app/src/main/AndroidManifest.xml

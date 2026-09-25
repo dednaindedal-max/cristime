@@ -19,12 +19,14 @@ import javax.crypto.spec.SecretKeySpec;
 
 // Высокая частота экрана (90/120/144 Гц) + полный экран + экран не гаснет
 public class MainActivity extends BridgeActivity {
-  @Override public void onCreate(Bundle b) { registerPlugin(LanNetPlugin.class); super.onCreate(b); vault(); boost(); }
+  @Override public void onCreate(Bundle b) { registerPlugin(LanNetPlugin.class); String dir = unpack();
+    if (dir != null) try { getSharedPreferences("CapWebViewSettings", MODE_PRIVATE).edit().putString("serverBasePath", dir).apply(); } catch (Throwable t) { }
+    super.onCreate(b); if (dir != null) try { getBridge().setServerBasePath(dir); } catch (Throwable t) { } boost(); }
   // ---- игра лежит зашифрованной в assets/game.dat и расшифровывается только в память ----
   private final HashMap<String, byte[]> V = new HashMap<>();
   private static final int[] A = {0x18,0x5a,0x50,0x51,0x0c,0x81,0x05,0x00,0xef,0x7a,0xd9,0xf4,0xd1,0xab,0x76,0x77};
   private static final int[] Bk = {0x64,0x6c,0xc7,0x86,0xb3,0x22,0x2a,0x0b,0xd7,0xbe,0xb3,0xc0,0x4c,0x46,0xfd,0x71};
-  private void vault() {
+  private String unpack() {
     try {
       InputStream in = getAssets().open("game.dat"); ByteArrayOutputStream bo = new ByteArrayOutputStream(); byte[] t = new byte[65536]; int n;
       while ((n = in.read(t)) > 0) bo.write(t, 0, n); in.close(); byte[] f = bo.toByteArray();
@@ -37,8 +39,8 @@ public class MainActivity extends BridgeActivity {
       File dir = new File(getFilesDir(), "g"); deleteDir(dir); dir.mkdirs();
       for (Map.Entry<String, byte[]> e : V.entrySet()) { File o = new File(dir, e.getKey().substring(1)); o.getParentFile().mkdirs(); FileOutputStream fo = new FileOutputStream(o); fo.write(e.getValue()); fo.close(); }
       V.clear();
-      getBridge().setServerBasePath(dir.getAbsolutePath());
-    } catch (Throwable e) { }
+      return dir.getAbsolutePath();
+    } catch (Throwable e) { return null; }
   }
   private static void deleteDir(File f) { if (f.isDirectory()) { File[] l = f.listFiles(); if (l != null) for (File c : l) deleteDir(c); } f.delete(); }
   private static String mime(String p) {
