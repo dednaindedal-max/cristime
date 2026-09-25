@@ -54,7 +54,7 @@ export function createMap() {
   }
   // LOD: рядом — полная ель, дальше 15 м — упрощённая, дальше 28 м — ещё проще (на таком расстоянии разницы не видно)
   map.userData.lod = (cam) => {
-    for (const c of lodCells) { const d = Math.hypot(cam.x - c.cen.x, cam.z - c.cen.z), want = d < 15 ? 0 : d < 28 ? 1 : 2;
+    for (const c of lodCells) { const d = Math.hypot(cam.x - c.cen.x, cam.z - c.cen.z), want = d < 24 ? 0 : d < 40 ? 1 : 2;
       if (want !== c.cur) { c.lv[c.cur].forEach(m => m.visible = false); c.lv[want].forEach(m => m.visible = true); c.cur = want; } }
   };
   const CACHE = {}, CACHED = new Set(['tree2', 'block', 'bench', 'lantern', 'gifts']);

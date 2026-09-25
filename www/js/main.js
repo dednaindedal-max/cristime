@@ -33,6 +33,21 @@ const fill = new THREE.DirectionalLight(0xfff4e0, 0.25); fill.position.set(6, 3,
 
 const map = createMap(); scene.add(map); map.userData.freeze(true);
 const festive = createFestive({ scene, map, camera });
+// ---------- лёгкие шейдеры без потери вида: матовые PBR-материалы (снег, дерево, хвоя, ткань) → Lambert.
+// Выглядят так же мягко (у шероховатых поверхностей блика почти нет), но фрагментный шейдер в 2–3 раза дешевле.
+// Глянцевые и металлические (лёд, игрушки, фонари) остаются PBR.
+{
+  const conv = new Map();
+  const toLambert = m => {
+    if (!m || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || m.metalness > 0.25 || m.roughness < 0.5 || m.envMap) return m;
+    if (conv.has(m)) return conv.get(m);
+    const l = new THREE.MeshLambertMaterial({ color: m.color, map: m.map, emissive: m.emissive, emissiveIntensity: m.emissiveIntensity, emissiveMap: m.emissiveMap,
+      vertexColors: m.vertexColors, transparent: m.transparent, opacity: m.opacity, side: m.side, alphaTest: m.alphaTest, flatShading: m.flatShading,
+      depthWrite: m.depthWrite, fog: m.fog, polygonOffset: m.polygonOffset, polygonOffsetFactor: m.polygonOffsetFactor, polygonOffsetUnits: m.polygonOffsetUnits });
+    l.color.multiplyScalar(1.0); conv.set(m, l); return l;
+  };
+  [map, festive.root || scene].forEach(r => r.traverse(o => { if (o.isMesh && !o.userData.keepPBR) o.material = Array.isArray(o.material) ? o.material.map(toLambert) : toLambert(o.material); }));
+}
 // дополнительные препятствия: столбы арки
 const baseCols = map.userData.colliders;
 map.userData.colliders = () => baseCols().concat([{ k: 'c', x: -1.1, z: 10.4, r: 0.15, top: 99 }, { k: 'c', x: 2.7, z: 10.4, r: 0.15, top: 99 }]);
@@ -164,14 +179,14 @@ let basePR = 1;
 // ---------- настройки ----------
 let composer = null, bloom = null;
 const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
-prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.autoRes = prefs.autoRes ?? true;
+prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.autoRes = prefs.autoRes2 ?? false;
 function applySettings() {
   const q = prefs.q, dpr = devicePixelRatio;
   basePR = SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]; resK = 1; renderer.setPixelRatio(basePR);
   renderer.setSize(innerWidth, innerHeight);
   const sm = [512, 1024, 2048, 4096][q]; sun.castShadow = q > 0;
   if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-  renderer.shadowMap.type = q >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.type = q >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; renderer.shadowMap.needsUpdate = true;
   scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); });
   if (q === 3) { if (!composer) { composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
       bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.82); composer.addPass(bloom);
@@ -185,7 +200,7 @@ function applySettings() {
 }
 document.querySelectorAll('#sQ button').forEach(b => b.onclick = () => { prefs.q = +b.dataset.v; applySettings(); });
 $('sSens').oninput = e => { prefs.sens = +e.target.value; applySettings(); }; $('sFov').oninput = e => { prefs.fov = +e.target.value; applySettings(); };
-$('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); }; $('sAuto').onchange = e => { prefs.autoRes = e.target.checked; applySettings(); };
+$('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); }; $('sAuto').onchange = e => { prefs.autoRes = prefs.autoRes2 = e.target.checked; applySettings(); };
 const openSet = () => $('setm').classList.add('on'); $('setBtn').onclick = openSet; $('bSet').onclick = openSet; $('sClose').onclick = () => $('setm').classList.remove('on');
 // Enter на клавиатуре телефона = готово (клавиатура закрывается)
 ['nick', 'code'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (id === 'code') $('bJoin')?.click(); } }));
