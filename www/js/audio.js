@@ -5,7 +5,7 @@ export function createAudio() {
   let ctx = null, master, sfx, amb, noiseBuf, fire = null, slide = null, wind = null, vol = 0.8;
   const listener = { x: 0, y: 0, z: 0, rx: 1, rz: 0 };
   // оригинальный саундпак Cristime — sfx/*.ogg
-  const B = {}, LIST = { walk: 8, run: 8, land: 4, jump: 3, rung: 5, throw: 4, splat: 5, hit: 2, boom: 4, crackle: 3, whistle: 3, bells: 3, fire: 0, wind: 0, slide: 0 };
+  const B = {}, LIST = { walk: 8, run: 8, land: 4, jump: 3, rung: 5, throw: 3, splat: 5, hit: 2, boom: 4, crackle: 2, whistle: 3, bells: 3, fire: 0, wind: 0, slide: 0 };
   async function loadAll() {
     const jobs = [];
     for (const [k, n] of Object.entries(LIST)) {
