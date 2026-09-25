@@ -136,7 +136,7 @@ export function createChibi({ color = 0xc8352c } = {}) {
     flap = flap * walkK + P.belly * (1.35 + Math.sin(t * 3) * 0.05) + P.sit * (1.1 + Math.sin(t * 9) * 0.15);
     let wl = -flap, wr = flap, wx0 = P.belly * -0.2, wx1 = wx0;
     if (P.climb > 0.01) { wl = wl * (1 - P.climb) - P.climb * (2.3 + s * 0.35); wr = wr * (1 - P.climb) + P.climb * (2.3 - s * 0.35); }
-    if (thr > 0) { const a = Math.sin(thr * Math.PI); wr += a * 0.4; wx1 += thr < 0.5 ? thr * 2 * 2.6 : (1 - thr) * 2 * 2.6 - (thr - 0.5) * 4; }
+    if (thr > 0) { const a = Math.sin(thr * Math.PI); wl -= a * 0.4; wx0 += thr < 0.5 ? thr * 2 * 2.6 : (1 - thr) * 2 * 2.6 - (thr - 0.5) * 4; }
     wings[0].rotation.set(wx0, 0, wl); wings[1].rotation.set(wx1, 0, wr);
     // весь риг: лёжа на животе / сидя
     rig.rotation.x = P.belly * (Math.PI / 2 - 0.12) - P.sit * 0.45;
