@@ -4,6 +4,8 @@ import { createPlayer } from './player.js';
 import { createNet, nativeHz } from './net.js';
 import { createSnowballs } from './snow.js';
 import { createFestive } from './festive.js';
+import { createAudio } from './audio.js';
+const sfx = createAudio();
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -32,7 +34,8 @@ scene.add(sun); scene.add(sun.target);
 const fill = new THREE.DirectionalLight(0xfff4e0, 0.25); fill.position.set(6, 3, 5); scene.add(fill);
 
 const map = createMap(); scene.add(map); map.userData.freeze(true);
-const festive = createFestive({ scene, map, camera });
+const festive = createFestive({ scene, map, camera, onSfx: (k, p, c) => k === 'launch' ? sfx.launch(p) : sfx.boom(p, c) });
+{ const cf = map.userData.items.find(o => o.userData.type === 'campfire'); if (cf) sfx.setFire({ x: cf.position.x, y: 0.5, z: cf.position.z }); }
 // ---------- лёгкие шейдеры без потери вида: матовые PBR-материалы (снег, дерево, хвоя, ткань) → Lambert.
 // Выглядят так же мягко (у шероховатых поверхностей блика почти нет), но фрагментный шейдер в 2–3 раза дешевле.
 // Глянцевые и металлические (лёд, игрушки, фонари) остаются PBR.
@@ -46,7 +49,7 @@ const festive = createFestive({ scene, map, camera });
       depthWrite: m.depthWrite, fog: m.fog, polygonOffset: m.polygonOffset, polygonOffsetFactor: m.polygonOffsetFactor, polygonOffsetUnits: m.polygonOffsetUnits });
     l.color.multiplyScalar(1.0); conv.set(m, l); return l;
   };
-  [map, festive.root || scene].forEach(r => r.traverse(o => { if (o.isMesh && !o.userData.keepPBR) o.material = Array.isArray(o.material) ? o.material.map(toLambert) : toLambert(o.material); }));
+  if (!qp.get('nolam')) [map, festive.root || scene].forEach(r => r.traverse(o => { if (o.isMesh && !o.userData.keepPBR) o.material = Array.isArray(o.material) ? o.material.map(toLambert) : toLambert(o.material); }));
 }
 // дополнительные препятствия: столбы арки
 const baseCols = map.userData.colliders;
@@ -66,8 +69,9 @@ const savePrefs = () => localStorage.setItem('cristime', JSON.stringify(prefs));
 let net;
 const balls = createSnowballs({ scene, heightAt: map.userData.heightAt, getColliders: () => COLS,
   getTargets: () => [{ id: net?.myId || 'me', p: player.pos }, ...(net ? net.targets() : [])],
-  onHitMe: () => { player.onHit(); const f = $('frost'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); } });
-const player = createPlayer({ scene, camera, renderer, onThrow: (o, v) => { balls.spawn(o, v, net?.myId || 'me'); net?.throwBall(o, v); } });
+  onSplat: p => sfx.splat(p),
+  onHitMe: () => { sfx.hitMe(); player.onHit(); const f = $('frost'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); } });
+const player = createPlayer({ scene, camera, renderer, onThrow: (o, v) => { sfx.throwBall(o); balls.spawn(o, v, net?.myId || 'me'); net?.throwBall(o, v); } });
 net = createNet({ scene, getMe: () => ({ ...player.getState(), name: prefs.name, color: prefs.color }),
   onBall: b => balls.spawn(new THREE.Vector3(b.x, b.y, b.z), new THREE.Vector3(b.vx, b.vy, b.vz), b.o),
   onPlayers: list => { $('rList').innerHTML = list.map(p => `<div><i style="background:#${new THREE.Color(p.color).getHexString()}"></i>${esc(p.name || 'Игрок')}${p.me ? ' (ты)' : ''}</div>`).join(''); },
@@ -176,10 +180,20 @@ function autoRes(fps, ms) {
   if (old !== resK) { renderer.setPixelRatio(basePR * resK); renderer.setSize(innerWidth, innerHeight); composer?.setPixelRatio(renderer.getPixelRatio()); composer?.setSize(innerWidth, innerHeight); }
 }
 let basePR = 1;
+// ---------- звуки шагов / прыжков / лестницы ----------
+const fs0 = { x: 0, z: 0, acc: 0, air: false, rung: 0, init: false };
+function footsteps(dt) {
+  const p = player.pos, m = player.mode, g = player.grounded;
+  if (!fs0.init) { fs0.x = p.x; fs0.z = p.z; fs0.init = true; }
+  const d = Math.hypot(p.x - fs0.x, p.z - fs0.z); fs0.x = p.x; fs0.z = p.z;
+  if ((m === 'walk' || m === 'deck') && g && d < 1) { fs0.acc += d; const stride = player.sprint ? 0.78 : 0.58; if (fs0.acc > stride) { fs0.acc = 0; sfx.step(p, player.sprint); } }
+  if (m === 'walk') { if (fs0.air && g) sfx.land(p, 1); if (!fs0.air && !g) sfx.jump(p); fs0.air = !g; } else fs0.air = false;
+  if (m === 'climb') { const r = Math.floor(player.climbU * 10); if (r !== fs0.rung) { fs0.rung = r; sfx.rung(p); } }
+}
 // ---------- настройки ----------
 let composer = null, bloom = null;
 const QH = ['Максимум FPS, без теней', 'Баланс', 'Чёткая картинка, мягкие тени', 'Супер-шейдеры: свечение огней (bloom), сглаживание SMAA, тени 4K, полное разрешение'];
-prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.autoRes = prefs.autoRes2 ?? false;
+prefs.q = prefs.q ?? 2; prefs.sens = prefs.sens ?? 1; prefs.fov = prefs.fov ?? 70; prefs.fps = prefs.fps ?? true; prefs.vol = prefs.vol ?? 0.8; prefs.autoRes = prefs.autoRes2 ?? false;
 function applySettings() {
   const q = prefs.q, dpr = devicePixelRatio;
   basePR = SHOT ? 1 : [0.75, 1, Math.min(dpr, 1.25), Math.min(dpr, 2)][q]; resK = 1; renderer.setPixelRatio(basePR);
@@ -195,11 +209,12 @@ function applySettings() {
   camera.fov = prefs.fov; camera.updateProjectionMatrix(); player.setSens?.(prefs.sens); player.setFov?.(prefs.fov);
   $('fps').style.display = prefs.fps ? '' : 'none';
   document.querySelectorAll('#sQ button').forEach(b => b.classList.toggle('on', +b.dataset.v === q)); $('sQh').textContent = QH[q];
-  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps; $('sAuto').checked = prefs.autoRes;
+  $('sSens').value = prefs.sens; $('sSv').textContent = '×' + (+prefs.sens).toFixed(2); $('sFov').value = prefs.fov; $('sFv').textContent = prefs.fov + '°'; $('sFps').checked = prefs.fps; $('sVol').value = prefs.vol; $('sVv').textContent = Math.round(prefs.vol * 100) + '%'; sfx.setVolume(prefs.vol); $('sAuto').checked = prefs.autoRes;
   savePrefs();
 }
 document.querySelectorAll('#sQ button').forEach(b => b.onclick = () => { prefs.q = +b.dataset.v; applySettings(); });
 $('sSens').oninput = e => { prefs.sens = +e.target.value; applySettings(); }; $('sFov').oninput = e => { prefs.fov = +e.target.value; applySettings(); };
+$('sVol').oninput = e => { prefs.vol = +e.target.value; applySettings(); };
 $('sFps').onchange = e => { prefs.fps = e.target.checked; applySettings(); }; $('sAuto').onchange = e => { prefs.autoRes = prefs.autoRes2 = e.target.checked; applySettings(); };
 const openSet = () => $('setm').classList.add('on'); $('setBtn').onclick = openSet; $('bSet').onclick = openSet; $('sClose').onclick = () => $('setm').classList.remove('on');
 // Enter на клавиатуре телефона = готово (клавиатура закрывается)
@@ -226,7 +241,9 @@ function frame() {
     player.update(dt, t);
     portalCd -= dt; if (portalCd <= 0 && player.pos.distanceTo(festive.portalPos) < 1.1) { portalCd = 4; toast('🎮 Мини-игры скоро появятся! Пока — горка и снежки'); }
   }
-  balls.update(dt, net.myId || 'me'); net.update(dt, t); if ((fN & 7) === 0) map.userData.lod?.(camera.position);
+  balls.update(dt, net.myId || 'me'); net.update(dt, t);
+  if (state === 'game') footsteps(dt);
+  sfx.update(dt, camera, { sliding: state === 'game' && (player.mode === 'slide' || player.mode === 'belly'), speed: player.speed || (player.mode === 'slide' ? 6 : 0) }); if ((fN & 7) === 0) map.userData.lod?.(camera.position);
   renderTimed();
   cpuMs = cpuMs * 0.9 + (performance.now() - t0) * 0.1;
   fN++; const n = performance.now();

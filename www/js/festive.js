@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 // Новогодняя атмосфера: снегопад (GPU), салюты, гирлянды между фонарями, арка «С Новым годом», портал мини-игр.
-export function createFestive({ scene, map, camera }) {
+export function createFestive({ scene, map, camera, onSfx }) {
   const items = map.userData.items, root = new THREE.Group(); scene.add(root);
   const T1 = items.find(o => o.userData.type === 'tree1'); const C = T1 ? T1.position.clone() : new THREE.Vector3();
 
@@ -118,9 +118,11 @@ export function createFestive({ scene, map, camera }) {
   function launch() {
     const a = Math.random() * 6.283, R = 22 + Math.random() * 12;
     const x = C.x + Math.cos(a) * R, z = C.z - 6 + Math.sin(a) * R * 0.7;
+    onSfx?.('launch', { x, y: 2, z });
     rockets.push({ x, y: 2, z, vx: (Math.random() - 0.5) * 2, vy: 17 + Math.random() * 5, vz: (Math.random() - 0.5) * 2, fuse: 1.0 + Math.random() * 0.5, type: Math.random() * 6 | 0 });
   }
   function explode(r) {
+    onSfx?.('boom', { x: r.x, y: r.y, z: r.z }, r.type === 2 || r.type === 4 || r.type === 5);
     const c1 = rc(), c2 = rc(), X = r.x, Y = r.y, Z = r.z; const fl = flashes.find(f => f.t <= 0); if (fl) { fl.s.position.set(X, Y, Z); fl.s.material.color.copy(c1).lerp(white, 0.5); fl.t = 0.35; }
     const sph = (n, sp, col, o) => { for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, th = Math.random() * 6.283, q = Math.sqrt(1 - u * u), s = sp * (0.85 + Math.random() * 0.3);
       emit(X, Y, Z, q * Math.cos(th) * s, u * s, q * Math.sin(th) * s, typeof col === 'function' ? col(i) : col, o); } };

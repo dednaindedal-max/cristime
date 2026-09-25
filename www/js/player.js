@@ -251,6 +251,6 @@ export function createPlayer({ scene, camera, renderer, onThrow }) {
   function setColor(c) { const v = chibi.visible; scene.remove(chibi); chibi = createChibi({ color: c }); chibi.scale.setScalar(S); chibi.visible = v; scene.add(chibi); chibi.position.copy(pos); chibi.rotation.y = face; return chibi; }
   const getState = () => ({ x: +pos.x.toFixed(3), y: +pos.y.toFixed(3), z: +pos.z.toFixed(3), f: +face.toFixed(3), s: +lastSpd.toFixed(2), a: !onGround && mode === 'walk' ? 1 : 0, m: lastPose, th: +throwT.toFixed(2) });
   const onHit = () => { hitT = 0.6; };
-  return { setColor, getState, onHit, get chibi() { return chibi; }, get pos() { return pos; }, enable, update, isActive: () => active,
+  return { get mode() { return mode; }, get grounded() { return onGround; }, get climbU() { return climbU; }, get speed() { return mode === 'slide' ? Math.abs(slideV) : vel.length(); }, get sprint() { return !!(run || keys.ShiftLeft || keys.ShiftRight); }, setColor, getState, onHit, get chibi() { return chibi; }, get pos() { return pos; }, enable, update, isActive: () => active,
     setSens: v => sens = v, setFov: v => fovV = v, look: (y, p, d) => { yaw = y; pitch = p; if (d) camDist = d; }, debug: { set: (m, u) => { mode = m; if (m === 'slide') { slideU = u; slideV = 5; pose = 'belly'; } if (m === 'climb') climbU = u; } } };
 }

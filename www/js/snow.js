@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 // Снежки: полёт по дуге, попадания, снежные брызги. Один InstancedMesh + один Points — 2 draw call'а.
-export function createSnowballs({ scene, heightAt, getColliders, getTargets, onHitMe }) {
+export function createSnowballs({ scene, heightAt, getColliders, getTargets, onHitMe, onSplat }) {
   const MAX = 96, balls = [];
   const im = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.09, 2), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, emissive: 0xdde8ff, emissiveIntensity: 0.35 }), MAX);
   im.count = 0; im.frustumCulled = false; scene.add(im);
@@ -27,7 +27,7 @@ export function createSnowballs({ scene, heightAt, getColliders, getTargets, onH
         else { const dx = b.p.x - c.x, dz = b.p.z - c.z, lx = dx * c.cos - dz * c.sin, lz = dx * c.sin + dz * c.cos; if (Math.abs(lx) < c.hx && Math.abs(lz) < c.hz) { hit = true; break; } } }
       if (!hit) for (const t of targets) { if (t.id === b.owner) continue; const dy = b.p.y - (t.p.y + 0.55);
         if (Math.hypot(b.p.x - t.p.x, dy * 0.8, b.p.z - t.p.z) < 0.5) { hit = true; t.hit?.(); if (t.id === myId) onHitMe?.(); break; } }
-      if (hit) { splat(b.p); balls.splice(i, 1); }
+      if (hit) { splat(b.p); onSplat?.(b.p); balls.splice(i, 1); }
     }
     im.count = balls.length; balls.forEach((b, i) => im.setMatrixAt(i, m4.makeTranslation(b.p.x, b.p.y, b.p.z))); im.instanceMatrix.needsUpdate = true;
     let any = false;
