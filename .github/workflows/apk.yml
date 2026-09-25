@@ -26,9 +26,18 @@ jobs:
           X
           cat $M
       - run: cp native/*.java android/app/src/main/java/app/cristime/game/
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Cristime.apk
+      - name: Release build (без отладки WebView, подписанный)
+        run: |
+          cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+      - name: Sign
+        env: { KS_B64: "${{ secrets.KS_B64 }}", KS_PASS: "${{ secrets.KS_PASS }}" }
+        run: |
+          echo "$KS_B64" | base64 -d > ks.jks
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/zipalign -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign --ks ks.jks --ks-key-alias cristime --ks-pass env:KS_PASS --key-pass env:KS_PASS --out Cristime.apk aligned.apk
+          rm ks.jks; $BT/apksigner verify Cristime.apk && ls -la Cristime.apk
       - uses: actions/upload-artifact@v4
         with: { name: Cristime-apk, path: Cristime.apk }
       - uses: softprops/action-gh-release@v2
-        with: { tag_name: "v${{ github.run_number }}", name: "Cristime v${{ github.run_number }}", files: Cristime.apk }
+        with: { tag_name: "v0.1-b${{ github.run_number }}", name: "Cristime 0.1 beta (сборка ${{ github.run_number }})", files: Cristime.apk }
