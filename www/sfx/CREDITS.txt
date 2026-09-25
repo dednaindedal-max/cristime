@@ -1,7 +1,0 @@
-Cristime — звуки (все CC0 / public domain)
-Шаги по снегу, прыжок, приземление: Corsica_S "Walking in snow" (CC0), нарезка/сведение Cristime — https://opengameart.org/content/42-snow-and-gravel-footsteps
-Ступени, шлепки снежков, попадание: Kenney Impact Sounds (CC0), сведение Cristime
-Взрывы салютов: rubberduck "25 CC0 bang sfx" (OpenGameArt)
-Костёр: OpenGameArt fireplace loop (CC0)
-Бросок: "Air Whoosh" (CC0), обработка Cristime
-Ветер, скольжение, свист ракеты, колокольчики: оригинальный синтез Cristime (soundpack/gen.py)
