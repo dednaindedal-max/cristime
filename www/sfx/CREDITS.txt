@@ -1,1 +1,3 @@
-Sounds: Kenney Impact Sounds (CC0), rubberduck "25 CC0 bang / firework SFX" (CC0), PagDev "Fireplace Sound loop" (CC0), "Air Whoosh" (CC0) — opengameart.org
+Cristime soundpack — полностью оригинальный.
+Все звуки созданы с нуля процедурным синтезом (soundpack/gen.py).
+Никаких сторонних записей. (c) Cristime

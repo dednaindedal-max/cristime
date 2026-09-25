@@ -1,11 +1,11 @@
-// Звуки Cristime — всё синтезируется на лету (Web Audio), без файлов: работает офлайн и почти ничего не весит.
+// Звуки Cristime — собственный саундпак (soundpack/gen.py, физически-мотивированный синтез), синтез Web Audio — запасной вариант.
 // Шаги по снегу, прыжок/приземление, лестница, скольжение, снежки, салюты (свист, взрыв, треск), костёр рядом, ветер, колокольчики.
 export function createAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   let ctx = null, master, sfx, amb, noiseBuf, fire = null, slide = null, wind = null, vol = 0.8;
   const listener = { x: 0, y: 0, z: 0, rx: 1, rz: 0 };
-  // настоящие записи (CC0): шаги по снегу, дерево, мягкие удары, салюты, костёр, взмах — sfx/*.ogg
-  const B = {}, LIST = { snow: 5, wood: 5, soft: 5, fw: [1, 2, 3, 4, 5, 6], fire: 0, whoosh: 0 };
+  // оригинальный саундпак Cristime — sfx/*.ogg
+  const B = {}, LIST = { walk: 8, run: 8, land: 4, jump: 3, rung: 5, throw: 4, splat: 5, hit: 2, boom: 4, crackle: 3, whistle: 3, bells: 3, fire: 0, wind: 0, slide: 0 };
   async function loadAll() {
     const jobs = [];
     for (const [k, n] of Object.entries(LIST)) {
@@ -13,7 +13,7 @@ export function createAudio() {
       B[k] = [];
       names.forEach(nm => jobs.push(fetch('sfx/' + nm + '.ogg').then(r => r.arrayBuffer()).then(a => new Promise((ok, no) => ctx.decodeAudioData(a, ok, no))).then(b => B[k].push(b)).catch(() => {})));
     }
-    await Promise.all(jobs); if (B.fire?.length) startFireLoop();
+    await Promise.all(jobs); if (B.fire?.length) startFireLoop(); if (B.wind?.length) startWindLoop(); if (B.slide?.length) startSlideLoop();
   }
   // проиграть случайный вариант записи в точке p
   function play(k, p, gain = 1, rate = 1, ref = 2, max = 30, delay = 0) {
@@ -58,7 +58,7 @@ export function createAudio() {
   // ---------- шаг по снегу: хруст = несколько коротких фильтрованных шумовых «зёрен» ----------
   function step(p, run = false, loud = 1) {
     if (!ctx) return;
-    if (play('snow', p, (run ? 0.9 : 0.7) * loud, run ? 1.08 + Math.random() * 0.14 : 0.92 + Math.random() * 0.16, 2, 25)) return; const t = now(), o = out(p, (run ? 0.55 : 0.42) * loud, 2, 25); if (o.g < 0.01) return;
+    if (play(run ? 'run' : 'walk', p, (run ? 0.9 : 0.75) * loud, 0.94 + Math.random() * 0.12, 2, 25)) return; const t = now(), o = out(p, (run ? 0.55 : 0.42) * loud, 2, 25); if (o.g < 0.01) return;
     const grains = 4 + (Math.random() * 3 | 0);
     for (let i = 0; i < grains; i++) {
       const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(), tt = t + i * (0.012 + Math.random() * 0.018);
@@ -71,21 +71,21 @@ export function createAudio() {
   }
   function land(p, k = 1) {
     if (!ctx) return;
-    if (B.snow?.length) { play('snow', p, 1.0 * k, 0.72 + Math.random() * 0.08, 2, 25); play('soft', p, 0.45 * k, 0.7, 2, 25); return; } const t = now(), o = out(p, 0.7 * k, 2, 25); if (o.g < 0.01) return;
+    if (play('land', p, 1.0 * k, 0.95 + Math.random() * 0.1, 2, 25)) return; const t = now(), o = out(p, 0.7 * k, 2, 25); if (o.g < 0.01) return;
     const s = noise(), lp = ctx.createBiquadFilter(), g = ctx.createGain(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(200, t + 0.25);
     env(g, t, 0.005, 1, 0.28); s.connect(lp).connect(g).connect(o.node); s.start(t, Math.random(), 0.4);
     step(p, true, 0.8);
   }
   function jump(p) {
     if (!ctx) return;
-    if (play('whoosh', p, 0.25, 1.7 + Math.random() * 0.2, 2, 20)) { play('snow', p, 0.5, 1.2, 2, 20); return; } const t = now(), o = out(p, 0.25, 2, 20);
+    if (play('jump', p, 0.7, 0.95 + Math.random() * 0.1, 2, 20)) return; const t = now(), o = out(p, 0.25, 2, 20);
     const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(600, t); bp.frequency.exponentialRampToValueAtTime(1800, t + 0.15); bp.Q.value = 1.5;
     env(g, t, 0.01, 0.6, 0.15); s.connect(bp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
   }
   // ---------- деревянная ступенька лестницы ----------
   function rung(p) {
     if (!ctx) return;
-    if (play('wood', p, 0.55, 0.95 + Math.random() * 0.15, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
+    if (play('rung', p, 0.6, 0.95 + Math.random() * 0.1, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
     const os = ctx.createOscillator(), g = ctx.createGain(), bp = ctx.createBiquadFilter(); os.type = 'triangle';
     os.frequency.setValueAtTime(190 + Math.random() * 40, t); os.frequency.exponentialRampToValueAtTime(120, t + 0.08);
     bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 2; env(g, t, 0.002, 0.8, 0.09);
@@ -96,21 +96,21 @@ export function createAudio() {
   // ---------- снежок ----------
   function throwBall(p) {
     if (!ctx) return;
-    if (play('whoosh', p, 0.45, 1.25 + Math.random() * 0.15, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
+    if (play('throw', p, 0.6, 0.95 + Math.random() * 0.1, 2, 25)) return; const t = now(), o = out(p, 0.35, 2, 25);
     const s = noise(), bp = ctx.createBiquadFilter(), g = ctx.createGain(); bp.type = 'bandpass'; bp.Q.value = 2.5;
     bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(2400, t + 0.18);
     env(g, t, 0.03, 0.8, 0.18); s.connect(bp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
   }
   function splat(p) {
     if (!ctx) return;
-    if (play('soft', p, 0.8, 0.85 + Math.random() * 0.3, 2.5, 35)) { play('snow', p, 0.5, 1.3, 2.5, 35); return; } const t = now(), o = out(p, 0.6, 2.5, 35); if (o.g < 0.01) return;
+    if (play('splat', p, 0.9, 0.93 + Math.random() * 0.14, 2.5, 35)) return; const t = now(), o = out(p, 0.6, 2.5, 35); if (o.g < 0.01) return;
     const s = noise(), lp = ctx.createBiquadFilter(), g = ctx.createGain(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2500, t); lp.frequency.exponentialRampToValueAtTime(300, t + 0.2);
     env(g, t, 0.002, 1, 0.2); s.connect(lp).connect(g).connect(o.node); s.start(t, Math.random(), 0.3);
     for (let i = 0; i < 3; i++) { const s2 = noise(), bp = ctx.createBiquadFilter(), g2 = ctx.createGain(), tt = t + 0.02 + i * 0.02;
       bp.type = 'bandpass'; bp.frequency.value = 1500 + Math.random() * 2500; bp.Q.value = 2; env(g2, tt, 0.002, 0.4, 0.04); s2.connect(bp).connect(g2).connect(o.node); s2.start(tt, Math.random(), 0.08); }
   }
   function hitMe() {
-    if (!ctx) return; const t = now(), g = ctx.createGain(); g.connect(sfx);
+    if (!ctx) return; if (B.hit?.length) { const s = ctx.createBufferSource(); s.buffer = B.hit[Math.random() * B.hit.length | 0]; const g0 = ctx.createGain(); g0.gain.value = 0.8; s.connect(g0).connect(sfx); s.start(); return; } const t = now(), g = ctx.createGain(); g.connect(sfx);
     const s = noise(), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200; env(g, t, 0.003, 0.9, 0.3); s.connect(lp).connect(g); s.start(t, Math.random(), 0.4);
     const os = ctx.createOscillator(), g2 = ctx.createGain(); os.type = 'sine'; os.frequency.setValueAtTime(880, t + 0.05); os.frequency.exponentialRampToValueAtTime(1320, t + 0.15);
     env(g2, t + 0.05, 0.01, 0.12, 0.25); os.connect(g2).connect(sfx); os.start(t + 0.05); os.stop(t + 0.4);
@@ -118,6 +118,7 @@ export function createAudio() {
   // ---------- салюты: свист ракеты, взрыв с задержкой звука по расстоянию, треск ----------
   function launch(p) {
     if (!ctx) return; const { g, pan, d } = spatial(p, 12, 140); if (g < 0.01) return; const t = now() + d / 340;
+    if (play('whistle', p, 0.5, 0.92 + Math.random() * 0.16, 12, 140, d / 340)) return;
     const gn = ctx.createGain(), pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null; gn.gain.value = 0.22 * g;
     if (pn) { pn.pan.value = pan * 0.7; gn.connect(pn).connect(sfx); } else gn.connect(sfx);
     const os = ctx.createOscillator(), og = ctx.createGain(); os.type = 'sine'; os.frequency.setValueAtTime(700, t); os.frequency.exponentialRampToValueAtTime(2600 + Math.random() * 800, t + 1.1);
@@ -129,7 +130,7 @@ export function createAudio() {
   }
   function boom(p, crackle = false) {
     if (!ctx) return; const { g, pan, d } = spatial(p, 15, 160); if (g < 0.01) return; const t = now() + d / 340;
-    if (play('fw', p, 1.0, 0.9 + Math.random() * 0.2, 15, 160, d / 340)) return;
+    if (play(crackle && B.crackle?.length ? 'crackle' : 'boom', p, 1.0, 0.9 + Math.random() * 0.2, 15, 160, d / 340)) return;
     const gn = ctx.createGain(), pn = ctx.createStereoPanner ? ctx.createStereoPanner() : null; gn.gain.value = 0.9 * g;
     if (pn) { pn.pan.value = pan * 0.6; gn.connect(pn).connect(sfx); } else gn.connect(sfx);
     // удар
@@ -153,6 +154,9 @@ export function createAudio() {
     if (pn) src.connect(bus).connect(pn).connect(amb); else src.connect(bus).connect(amb);
     src.start(0, Math.random() * 20); fire = { bus, pn, popT: 9e9, sample: true };
   }
+  function loopSrc(buf, dest, g0) { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; const g = ctx.createGain(); g.gain.value = g0; src.connect(g).connect(dest); src.start(0, Math.random() * buf.duration); return { src, g }; }
+  function startWindLoop() { if (wind?.g) wind.g.gain.value = 0; wind = loopSrc(B.wind[0], amb, 0.35); }
+  function startSlideLoop() { if (slide?.g) slide.g.gain.value = 0; const l = loopSrc(B.slide[0], sfx, 0); slide = { g: l.g, bp: null, src: l.src }; }
   function startFire() {
     const s = noise(true), bp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
     bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.5; lp.type = 'lowpass'; lp.frequency.value = 2500; g.gain.value = 0;
@@ -184,6 +188,7 @@ export function createAudio() {
     s.connect(lp).connect(g).connect(amb); s.start(); wind = { g };
   }
   function bells() {
+    if (B.bells?.length) { const s = ctx.createBufferSource(); s.buffer = B.bells[Math.random() * B.bells.length | 0]; const g = ctx.createGain(); g.gain.value = 0.18; s.connect(g).connect(amb); s.start(); return; }
     const t = now(), notes = [1318.5, 1568, 1760, 2093, 1568, 1318.5], n = 3 + (Math.random() * 4 | 0), bus = ctx.createGain(); bus.gain.value = 0.05; bus.connect(amb);
     for (let i = 0; i < n; i++) { const f = notes[Math.random() * notes.length | 0], tt = t + i * (0.12 + Math.random() * 0.1);
       [1, 2.76, 5.4].forEach((h, k) => { const os = ctx.createOscillator(), g = ctx.createGain(); os.type = 'sine'; os.frequency.value = f * h;
@@ -196,7 +201,7 @@ export function createAudio() {
     const e = cam.matrixWorld.elements; listener.rx = e[0]; listener.rz = e[2];
     if (fire && firePos) { const { g, pan } = spatial(firePos, 2.2, 22); fire.bus.gain.setTargetAtTime(g * 0.9, now(), 0.1); if (fire.pn) fire.pn.pan.setTargetAtTime(pan * 0.8, now(), 0.1);
       if (!fire.sample) fire.popT -= dt; if (fire.popT <= 0) { fire.popT = 0.05 + Math.random() * 0.35; if (g > 0.02) firePop(g * 0.8, pan * 0.8); } }
-    if (slide) { const k = st && st.sliding ? Math.min(1, st.speed / 6) : 0; slide.g.gain.setTargetAtTime(k * 0.35, now(), 0.08); slide.bp.frequency.setTargetAtTime(900 + k * 1600, now(), 0.1); }
+    if (slide) { const k = st && st.sliding ? Math.min(1, st.speed / 6) : 0; if (slide.bp) { slide.g.gain.setTargetAtTime(k * 0.35, now(), 0.08); slide.bp.frequency.setTargetAtTime(900 + k * 1600, now(), 0.1); } else { slide.g.gain.setTargetAtTime(k * 0.9, now(), 0.08); slide.src.playbackRate.setTargetAtTime(0.8 + k * 0.4, now(), 0.1); } }
     bellT -= dt; if (bellT <= 0) { bellT = 18 + Math.random() * 25; bells(); }
   }
   function setVolume(v) { vol = v; if (master) master.gain.setTargetAtTime(v, now(), 0.05); }
