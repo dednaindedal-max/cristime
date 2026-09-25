@@ -304,7 +304,9 @@ export function createMap() {
   function sledColliders(o) {
     o.updateMatrixWorld(true); const R = o.userData.ride, sc = o.scale.x, out = [];
     const w = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(o.matrixWorld);
-    const c1 = w(1.1, 0, -0.1); out.push({ k: 'c', x: c1.x, z: c1.z, r: 2.0 * sc, top: 99 });
+    const c1 = w(1.1, 0, -0.25); out.push({ k: 'c', x: c1.x, z: c1.z, r: 1.95 * sc, top: 99 });
+    [[0.3, -1.3, 1.05], [2.1, -1.4, 0.8], [-0.3, 0.9, 0.75]].forEach(([x, z, r]) => { const q = w(x, 0, z); out.push({ k: 'c', x: q.x, z: q.z, r: r * sc, top: 99 }); });
+    [-0.35, 0.35].forEach(z => { const q = w(4.0, 0, z); out.push({ k: 'c', x: q.x, z: q.z, r: 0.07 * sc, top: 99 }); });   // стойки лестницы
     const c2 = w(1.9, 0, 0.9); out.push({ k: 'c', x: c2.x, z: c2.z, r: 1.1 * sc, top: 99 });
     for (let i = 0; i <= 8; i++) { const u = i / 8 * 0.78, p = R.path.getPoint(u), q = w(p.x, 0, p.z); out.push({ k: 'c', x: q.x, z: q.z, r: (1.25 + p.y * 0.2) * sc, top: 99 }); }
     return out;
