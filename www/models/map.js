@@ -33,12 +33,17 @@ export function createMap() {
   const items = [];
   // склейка + кэш одинаковых моделей (ели, скамейки, фонари...) — одна геометрия на все копии
   let instDirty = false, inst = [];
+  // ели разбиты на участки 9×9 м: камера рисует только те участки, что в кадре (frustum culling) — картинка та же, треугольников в разы меньше
   function syncInstances() {
     if (!CACHE.tree2) return;
     const trees = items.filter(o => o.userData.type === 'tree2');
-    if (!inst.length) inst = CACHE.tree2.map(c => { const im = new THREE.InstancedMesh(c.g, c.m, 1500); im.castShadow = c.cs; im.receiveShadow = true; im.frustumCulled = false; map.add(im); return im; });
-    trees.forEach((t, i) => { t.updateMatrixWorld(); inst.forEach(im => im.setMatrixAt(i, t.matrixWorld)); });
-    inst.forEach(im => { im.count = trees.length; im.instanceMatrix.needsUpdate = true; });
+    inst.forEach(im => { map.remove(im); im.dispose(); }); inst = [];
+    const cells = new Map();
+    trees.forEach(t => { t.updateMatrixWorld(); const k = Math.floor(t.position.x / 9) + ',' + Math.floor(t.position.z / 9); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(t); });
+    for (const list of cells.values()) CACHE.tree2.forEach(c => {
+      const im = new THREE.InstancedMesh(c.g, c.m, list.length); im.castShadow = c.cs; im.receiveShadow = true;
+      list.forEach((t, i) => im.setMatrixAt(i, t.matrixWorld)); im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere(); im.frustumCulled = true; im.matrixAutoUpdate = false; im.updateMatrix(); map.add(im); inst.push(im); });
     instDirty = false;
   }
   const CACHE = {}, CACHED = new Set(['tree2', 'block', 'bench', 'lantern', 'gifts']);
@@ -304,9 +309,7 @@ export function createMap() {
   function sledColliders(o) {
     o.updateMatrixWorld(true); const R = o.userData.ride, sc = o.scale.x, out = [];
     const w = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(o.matrixWorld);
-    const c1 = w(1.1, 0, -0.25); out.push({ k: 'c', x: c1.x, z: c1.z, r: 1.95 * sc, top: 99 });
-    [[0.3, -1.3, 1.05], [2.1, -1.4, 0.8], [-0.3, 0.9, 0.75]].forEach(([x, z, r]) => { const q = w(x, 0, z); out.push({ k: 'c', x: q.x, z: q.z, r: r * sc, top: 99 }); });
-    [-0.35, 0.35].forEach(z => { const q = w(4.0, 0, z); out.push({ k: 'c', x: q.x, z: q.z, r: 0.07 * sc, top: 99 }); });   // стойки лестницы
+    const c1 = w(1.1, 0, -0.1); out.push({ k: 'c', x: c1.x, z: c1.z, r: 2.0 * sc, top: 99 });
     const c2 = w(1.9, 0, 0.9); out.push({ k: 'c', x: c2.x, z: c2.z, r: 1.1 * sc, top: 99 });
     for (let i = 0; i <= 8; i++) { const u = i / 8 * 0.78, p = R.path.getPoint(u), q = w(p.x, 0, p.z); out.push({ k: 'c', x: q.x, z: q.z, r: (1.25 + p.y * 0.2) * sc, top: 99 }); }
     return out;
