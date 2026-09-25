@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { joinRoom as tJoin, selfId } from '../vendor/trystero-nostr.js';
 import { createChibi } from '../models/chibi.js';
 import { createLan } from './lan.js';
+import { registerPlugin, Capacitor } from '../vendor/capcore.js';
+// в приложении (APK) — нативная локальная сеть: работает в раздаче вообще без интернета
+const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform?.());
+const LN = NATIVE ? registerPlugin('LanNet') : null;
 
 // Онлайн без своего сервера: игроки находят друг друга через публичные nostr-реле (много серверов по миру,
 // нужен совсем слабый интернет — хватает EDGE), дальше игра идёт напрямую P2P (WebRTC).
@@ -48,10 +52,13 @@ export function createNet({ scene, getMe, onPlayers, onStatus, onBall }) {
     leave(); code = c.trim().toUpperCase(); host = isHost;
     try { room = tJoin({ appId: APP, rtcConfig: RTC }, code); }
     catch (e) { onStatus?.('error', 'Онлайн не запустился: ' + e.message); throw e; }
-    const [sS, gS] = room.makeAction('st'); const [sB, gB] = room.makeAction('bl');
-    sendSt = sS; sendBall = sB;
-    const onSt = (d, id) => { states[id] = d; seen[id] = performance.now(); avatarFor(id, d); if (!avatars.get(id)?.listed) { avatars.get(id).listed = true; list(); onStatus?.('join', d.name); } };
-    gS(onSt); gB((b, id) => onBall?.({ ...b, o: id }));
+    const [sS, gS] = room.makeAction('st'); const [sB, gB] = room.makeAction('bl'); const [sR, gR] = room.makeAction('rl');
+    sendSt = d => { sS(d); if (lnOn) lnSend({ k: 'st', id: selfId, d }); }; sendBall = d => { sB(d); if (lnOn) lnSend({ k: 'bl', id: selfId, d }); };
+    relayNet = m => sR(m);
+    const onSt = (d, id) => { recvSt(d, id); if (lnOn) lnSend({ k: 'st', id, d }); };
+    gS(onSt); gB((b, id) => { onBall?.({ ...b, o: id }); if (lnOn) lnSend({ k: 'bl', id, d: b }); });
+    gR(m => handle(m));
+    if (isHost && LN) lnHost(code);
     room.onPeerJoin(() => list());
     room.onPeerLeave(id => { const n = states[id]?.name; drop(id); if (n) onStatus?.('leave', n); });
     timer = setInterval(() => {
@@ -60,6 +67,24 @@ export function createNet({ scene, getMe, onPlayers, onStatus, onBall }) {
     }, TICK);
     list();
     return Promise.resolve(code);
+  }
+  // ---------- нативная LAN (APK): хост = TCP-сервер, гости находят его по коду ----------
+  let lnOn = false, lnIds = {}, relayNet = null, lnSubs = [];
+  const lnSend = (m, skip) => LN.send({ d: JSON.stringify(m), c: -1, skip: skip ?? -99 }).catch(() => {});
+  function handle(m) { if (!m || m.id === selfId) return; if (m.k === 'st') recvSt(m.d, m.id); else if (m.k === 'bl') onBall?.({ ...m.d, o: m.id }); else if (m.k === 'bye') { const n = states[m.id]?.name; drop(m.id); if (n) onStatus?.('leave', n); } }
+  async function lnListen(isHost) {
+    lnSubs.push(await LN.addListener('msg', e => { let m; try { m = JSON.parse(e.d); } catch (x) { return; }
+      if (isHost) { lnIds[e.c] = m.id; lnSend(m, e.c); relayNet?.(m); } handle(m); }));
+    lnSubs.push(await LN.addListener('close', e => { if (isHost) { const id = lnIds[e.c]; if (id) { lnSend({ k: 'bye', id }); relayNet?.({ k: 'bye', id }); const n = states[id]?.name; drop(id); if (n) onStatus?.('leave', n); } }
+      else onStatus?.('error', 'Связь с хостом потеряна'); }));
+  }
+  async function lnHost(c) { try { await LN.host({ code: c }); await lnListen(true); lnOn = true; } catch (e) { console.warn('LAN host', e); } }
+  async function lnJoin(c) {
+    await LN.join({ code: c, timeout: 2500 });     // бросит ошибку, если хоста в этой сети нет
+    leave(); code = c; host = false; lnOn = true; await lnListen(false);
+    sendSt = d => lnSend({ k: 'st', id: selfId, d }); sendBall = d => lnSend({ k: 'bl', id: selfId, d });
+    timer = setInterval(() => { sendSt(getMe()); const now = performance.now(); for (const id in seen) if (now - seen[id] > 8000) drop(id); }, TICK);
+    list(); return c;
   }
   // ---------- режим без интернета (QR) ----------
   function recvSt(d, id) { states[id] = d; seen[id] = performance.now(); avatarFor(id, d); const a = avatars.get(id); if (!a.listed) { a.listed = true; list(); onStatus?.('join', d.name); } }
@@ -79,11 +104,16 @@ export function createNet({ scene, getMe, onPlayers, onStatus, onBall }) {
     list(); return lan;
   }
   const hostRoom = () => open(genCode(), true);
-  const joinRoom = (c) => open(c, false);
+  async function joinRoom(c) { c = c.trim().toUpperCase();
+    if (LN) { onStatus?.('info', 'Ищу лобби в этой сети…'); try { return await lnJoin(c); } catch (e) { onStatus?.('info', 'Подключаюсь через интернет…'); } }
+    const r = await open(c, false);
+    setTimeout(() => { if (room && code === c && !Object.keys(states).length) onStatus?.('empty', c); }, 12000);
+    return r; }
   function leave() {
     clearInterval(timer); timer = null;
     try { room?.leave(); } catch (e) {}
     lan?.close(); lan = null; lanIds = {};
+    if (lnOn) { lnOn = false; LN.stop().catch(() => {}); lnSubs.forEach(h => h.remove?.()); lnSubs = []; lnIds = {}; } relayNet = null;
     room = null; sendSt = sendBall = null; code = null; host = false;
     for (const id of Object.keys(states)) drop(id);
   }
@@ -97,5 +127,5 @@ export function createNet({ scene, getMe, onPlayers, onStatus, onBall }) {
   }
   const throwBall = (o, v) => sendBall?.({ x: +o.x.toFixed(2), y: +o.y.toFixed(2), z: +o.z.toFixed(2), vx: +v.x.toFixed(2), vy: +v.y.toFixed(2), vz: +v.z.toFixed(2) });
   const targets = () => [...avatars.entries()].map(([id, a]) => ({ id, p: a.obj.position }));
-  return { throwBall, targets, hostRoom, joinRoom, leave, update, get myId() { return selfId; }, get code() { return code; }, get online() { return !!room || !!lan; }, openLan, get lan() { return lan; }, get isHost() { return host; } };
+  return { throwBall, targets, hostRoom, joinRoom, leave, update, get myId() { return selfId; }, get code() { return code; }, get online() { return !!room || !!lan || lnOn; }, get local() { return lnOn && !room; }, openLan, get lan() { return lan; }, get isHost() { return host; } };
 }

@@ -56,7 +56,7 @@ const player = createPlayer({ scene, camera, renderer, onThrow: (o, v) => { ball
 net = createNet({ scene, getMe: () => ({ ...player.getState(), name: prefs.name, color: prefs.color }),
   onBall: b => balls.spawn(new THREE.Vector3(b.x, b.y, b.z), new THREE.Vector3(b.vx, b.vy, b.vz), b.o),
   onPlayers: list => { $('rList').innerHTML = list.map(p => `<div><i style="background:#${new THREE.Color(p.color).getHexString()}"></i>${esc(p.name || 'Игрок')}${p.me ? ' (ты)' : ''}</div>`).join(''); },
-  onStatus: (k, v) => { if (k === 'join') toast('👋 ' + v + ' зашёл в лобби'); if (k === 'lanopen') { qrHide(); if (state !== 'game') { toGame(true); $('rCode').textContent = 'без интернета'; $('rCopy').style.display = 'none'; } else toast('Игрок подключён!'); } if (k === 'leave') toast(v + ' вышел'); if (k === 'error') { status(v); toast(v); if (state === 'game' && !net.online) $('room').style.display = 'none'; } } });
+  onStatus: (k, v) => { if (k === 'join') toast('👋 ' + v + ' зашёл в лобби'); if (k === 'lanopen') { qrHide(); if (state !== 'game') { toGame(true); $('rCode').textContent = 'без интернета'; $('rCopy').style.display = 'none'; } else toast('Игрок подключён!'); } if (k === 'leave') toast(v + ' вышел'); if (k === 'info') status(v); if (k === 'empty') toast('В лобби ' + v + ' пока никого — проверь код или подожди друга'); if (k === 'error') { status(v); toast(v); if (state === 'game' && !net.online) $('room').style.display = 'none'; } } });
 
 $('nick').value = prefs.name; $('nick').oninput = e => { prefs.name = e.target.value.trim().slice(0, 14); savePrefs(); $('nick').classList.remove('bad'); };
 $('colors').innerHTML = COLORS.map(c => `<button data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}"></button>`).join('');

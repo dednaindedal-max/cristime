@@ -9,7 +9,7 @@ import com.getcapacitor.BridgeActivity;
 
 // Высокая частота экрана (90/120/144 Гц) + полный экран + экран не гаснет
 public class MainActivity extends BridgeActivity {
-  @Override public void onCreate(Bundle b) { super.onCreate(b); boost(); }
+  @Override public void onCreate(Bundle b) { registerPlugin(LanNetPlugin.class); super.onCreate(b); boost(); }
   @Override public void onResume() { super.onResume(); boost(); }
   @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) boost(); }
   private void boost() {
