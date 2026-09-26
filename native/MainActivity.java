@@ -5,6 +5,10 @@ import android.os.Bundle;
 import android.view.Display;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.SurfaceView;
+import android.view.SurfaceHolder;
+import android.view.Surface;
+import android.view.ViewGroup;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 import android.webkit.WebResourceRequest;
@@ -21,7 +25,17 @@ import javax.crypto.spec.SecretKeySpec;
 public class MainActivity extends BridgeActivity {
   @Override public void onCreate(Bundle b) { registerPlugin(LanNetPlugin.class); String dir = unpack();
     if (dir != null) try { getSharedPreferences("CapWebViewSettings", MODE_PRIVATE).edit().putString("serverBasePath", dir).apply(); } catch (Throwable t) { }
-    super.onCreate(b); if (dir != null) try { getBridge().setServerBasePath(dir); } catch (Throwable t) { } boost(); }
+    super.onCreate(b); if (dir != null) try { getBridge().setServerBasePath(dir); } catch (Throwable t) { } boost(); hz(); }
+  // «голос» за максимальную частоту: крошечный SurfaceView просит у системы 120/144 Гц (WebView сам просит только 60)
+  private void hz() {
+    try { if (Build.VERSION.SDK_INT < 30) return; final SurfaceView sv = new SurfaceView(this);
+      sv.getHolder().addCallback(new SurfaceHolder.Callback() {
+        public void surfaceCreated(SurfaceHolder h) { try { float mx = 60; for (Display.Mode m : getDisplay().getSupportedModes()) mx = Math.max(mx, m.getRefreshRate());
+          h.getSurface().setFrameRate(mx, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE); } catch (Throwable t) { } }
+        public void surfaceChanged(SurfaceHolder h, int f, int w, int hh) { }
+        public void surfaceDestroyed(SurfaceHolder h) { } });
+      addContentView(sv, new ViewGroup.LayoutParams(1, 1));
+    } catch (Throwable t) { } }
   // ---- игра лежит зашифрованной в assets/game.dat и расшифровывается только в память ----
   private final HashMap<String, byte[]> V = new HashMap<>();
   private static final int[] A = {0x18,0x5a,0x50,0x51,0x0c,0x81,0x05,0x00,0xef,0x7a,0xd9,0xf4,0xd1,0xab,0x76,0x77};
