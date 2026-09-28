@@ -20,10 +20,12 @@ public class LanNetPlugin extends Plugin {
   private volatile boolean running = false;
   private DatagramSocket udp; private ServerSocket server; private Socket guest; private PrintWriter guestOut;
   private final Map<Integer, PrintWriter> clients = new ConcurrentHashMap<>(); private final Map<Integer, Socket> socks = new ConcurrentHashMap<>();
-  private int nextId = 1; private WifiManager.MulticastLock mlock;
+  private int nextId = 1; private WifiManager.MulticastLock mlock; private WifiManager.WifiLock wlock;
   private final ExecutorService sendPool = Executors.newSingleThreadExecutor();
 
-  private void lock() { try { if (mlock == null) { WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE); mlock = wm.createMulticastLock("cristime"); mlock.setReferenceCounted(false); } mlock.acquire(); } catch (Throwable t) {} }
+  private void lock() { try { if (wlock == null) { WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+      wlock = wm.createWifiLock(android.os.Build.VERSION.SDK_INT >= 29 ? 4 /*FULL_LOW_LATENCY*/ : 3 /*FULL_HIGH_PERF*/, "cristime-ll"); wlock.setReferenceCounted(false); } wlock.acquire(); } catch (Throwable t) {}
+    try { if (mlock == null) { WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE); mlock = wm.createMulticastLock("cristime"); mlock.setReferenceCounted(false); } mlock.acquire(); } catch (Throwable t) {} }
   private void emit(String ev, int c, String d) { JSObject o = new JSObject(); o.put("c", c); if (d != null) o.put("d", d); notifyListeners(ev, o); }
 
   @PluginMethod public void host(PluginCall call) {
